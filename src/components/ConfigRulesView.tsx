@@ -399,11 +399,8 @@ export const ConfigRulesView: React.FC<ConfigRulesViewProps> = ({
             <div>
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-emerald-600" />
-                区域基础数据与销售渠道配置
+                区域基础数据
               </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                维护各销售大区及适用范围，工作台表格下拉菜单及导入校验均依赖本表。
-              </p>
             </div>
           )}
         </div>

@@ -19,6 +19,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
+import { WorkbenchAnalytics } from './WorkbenchAnalytics';
 
 interface WorkbenchTableProps {
   tableData: OfferingRow[];
@@ -618,6 +619,9 @@ export const WorkbenchTable: React.FC<WorkbenchTableProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Analytics Data Visualization Section */}
+      <WorkbenchAnalytics tableData={tableData} />
 
       {/* Batch Price Range Modal */}
       {showBatchPriceModal && (

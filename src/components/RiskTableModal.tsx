@@ -14,7 +14,7 @@ import {
   Check,
   AlertCircle,
   HelpCircle,
-  Trash2,
+  Eraser,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -360,7 +360,7 @@ export const RiskTableModal: React.FC<RiskTableModalProps> = ({
                 className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                 title="清空所有已填写的出险率"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Eraser className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>

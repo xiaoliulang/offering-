@@ -118,7 +118,7 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
           {/* Label above textarea */}
           <div className="flex items-center justify-between">
             <label className="text-xs font-semibold text-slate-700">
-              批量数据输入（复制“区域、服务offering”、硬件BU、硬件LV3、硬件offering、维修部件/前台展示分类）：
+              批量数据输入（复制“区域、服务offering”、硬件BU、硬件LV3、硬件offering）：
             </label>
           </div>
 
@@ -127,7 +127,7 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
             value={inputText}
             onChange={handleTextChange}
             rows={7}
-            placeholder={`"中国地区部,欧洲地区部",ASDW-Hope-1AY121CAB,Hope,手机,"Hope-L29C, Hope-L09C, Hope-AL10D","前壳,外屏"\n"中国地区部",CAP-Mate-2BY242BCN,Mate,手机,"Hope-L29C、Hope-L09C、Hope-AL10D","前壳,外屏"`}
+            placeholder={`"中国地区部,欧洲地区部",ASDW-Hope-1AY121CAB,Hope,手机，"Hope-L29C，Hope-L09C，Hope-AL10D"\n"中国地区部"，CAP-Mate-2BY242BCN,Mate,手机，"Hope-L29C、Hope-L09C、Hope-AL10D"`}
             className="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
           />
 

@@ -452,9 +452,9 @@ export async function downloadExcelTable(
  * 区域, 服务offering, 硬件BU, 硬件LV3, 硬件offering, 维修部件
  */
 export const STANDARD_OFFERING_TEMPLATE_CSV =
-  '区域,服务offering,硬件BU,硬件LV3,硬件offering,维修部件\n' +
-  '"中国地区部,欧洲地区部",ASDW-Hope-1AY121CAB,Hope,手机,"Hope-L29C, Hope-L09C, Hope-AL10D","前壳,外屏"\n' +
-  '"中国地区部",CAP-Mate-2BY242BCN,Mate,手机,"Hope-L29C、Hope-L09C、Hope-AL10D","前壳,外屏"';
+  '区域,服务offering,硬件BU,硬件LV3,硬件offering\n' +
+  '"中国地区部,欧洲地区部",ASDW-Hope-1AY121CAB,Hope,手机，"Hope-L29C，Hope-L09C，Hope-AL10D"\n' +
+  '"中国地区部"，CAP-Mate-2BY242BCN,Mate,手机，"Hope-L29C、Hope-L09C、Hope-AL10D"';
 
 /**
  * Parses user pasted text from Excel or CSV.
@@ -463,8 +463,8 @@ export const STANDARD_OFFERING_TEMPLATE_CSV =
  * 2: 服务offering (自动解析LV3/LV4及期限/次数/对象)
  * 3: 硬件BU
  * 4: 硬件LV3
- * 5..N-1: 硬件offering / 型号
- * N: 维修部件
+ * 5: 硬件offering / 型号
+ * (可选) 6: 维修部件 (若未提供，则自动根据服务产品LV4+硬件BU从规则库匹配)
  * 设备价格(从/至)不填入数据，保持留空
  */
 export function parseBatchInputText(
@@ -476,26 +476,26 @@ export function parseBatchInputText(
   const lines = text.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
   const newRows: OfferingRow[] = [];
 
-  // Helper to split CSV or Tab-delimited line safely respecting quotation marks
+  // Helper to split CSV or Tab-delimited line safely respecting quotation marks and Chinese commas
   const splitLine = (line: string): string[] => {
     if (line.includes('\t')) {
-      return line.split('\t').map((c) => c.trim().replace(/^["']|["']$/g, ''));
+      return line.split('\t').map((c) => c.trim().replace(/^["'“”]+|["'“”]+$/g, '').trim());
     }
     const result: string[] = [];
     let current = '';
     let inQuotes = false;
     for (let i = 0; i < line.length; i++) {
       const char = line[i];
-      if (char === '"' || char === "'") {
+      if (char === '"' || char === "'" || char === '“' || char === '”') {
         inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
-        result.push(current.trim().replace(/^["']|["']$/g, ''));
+      } else if ((char === ',' || char === '，') && !inQuotes) {
+        result.push(current.trim().replace(/^["'“”]+|["'“”]+$/g, '').trim());
         current = '';
       } else {
         current += char;
       }
     }
-    result.push(current.trim().replace(/^["']|["']$/g, ''));
+    result.push(current.trim().replace(/^["'“”]+|["'“”]+$/g, '').trim());
     return result;
   };
 
@@ -552,14 +552,14 @@ export function parseBatchInputText(
       newRows.push(record);
     } else if (cols.length >= 2) {
       // Standard Excel column format:
-      // 0: 区域, 1: 服务offering, 2: 硬件BU, 3: 硬件LV3, 4..N-1: 硬件offering, N: 维修部件
+      // 0: 区域, 1: 服务offering, 2: 硬件BU, 3: 硬件LV3, 4: 硬件offering, 5: 维修部件 (可选)
       const region = cols[0] || '华东大区';
       const offering = cols[1] || '';
       const hardwareBU = cols[2] || 'Hope';
       const hardwareLV3 = cols[3] || '';
       
-      const parts = cols.length >= 6 ? cols[cols.length - 1] : (cols[5] || '');
-      const hardwareOffering = cols.length > 5
+      const parts = cols.length >= 6 ? cols[cols.length - 1] : '';
+      const hardwareOffering = cols.length >= 6
         ? cols.slice(4, cols.length - 1).filter(Boolean).join(', ')
         : (cols[4] || '');
 
@@ -577,7 +577,7 @@ export function parseBatchInputText(
         partRules
       );
 
-      // Directly use parts from last column if provided
+      // Directly use parts from last column if explicitly provided (6 or more columns)
       if (parts && parts.trim()) {
         record.parts = parts.trim();
       }

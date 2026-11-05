@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   PrefixRule,
   PartRule,
@@ -7,6 +7,19 @@ import {
   RiskTableRow,
   HistoryRiskRecord,
 } from './types/offering';
+import {
+  fetchInitialData,
+  syncPrefixRules,
+  syncPartRules,
+  syncRegions,
+  syncWorkbench,
+  syncRates,
+  saveHistoryToBackend,
+  deleteHistoryRecordOnBackend,
+  deleteHistoryBatchOnBackend,
+  clearAllHistoryOnBackend,
+  resetDefaultConfigsOnBackend,
+} from './api/client';
 import {
   DEFAULT_PREFIX_RULES,
   DEFAULT_PART_RULES,
@@ -159,27 +172,68 @@ export default function App() {
     }
   });
 
+  const isServerLoadedRef = useRef(false);
+
+  // Fetch all persisted data from SQLite on initial load
+  useEffect(() => {
+    let isMounted = true;
+    fetchInitialData().then((serverData) => {
+      if (!isMounted) return;
+      if (serverData) {
+        if (serverData.prefixRules && serverData.prefixRules.length > 0) {
+          setPrefixRules(serverData.prefixRules);
+        }
+        if (serverData.partRules && serverData.partRules.length > 0) {
+          setPartRules(serverData.partRules);
+        }
+        if (serverData.regionTable && serverData.regionTable.length > 0) {
+          setRegionTable(serverData.regionTable);
+        }
+        if (serverData.tableData) {
+          setTableData(serverData.tableData);
+        }
+        if (serverData.ratesObj) {
+          setRatesMap(new Map(Object.entries(serverData.ratesObj)));
+        }
+        if (serverData.historyRecords) {
+          setHistoryRecords(serverData.historyRecords);
+        }
+      }
+      isServerLoadedRef.current = true;
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(historyRecords));
     } catch {}
   }, [historyRecords]);
 
-  const handleSaveHistoryRecords = useCallback((newRecords: HistoryRiskRecord[]) => {
-    setHistoryRecords((prev) => [...newRecords, ...prev]);
-    showToast(`已成功保存 ${newRecords.length} 条数据至「历史出险率配置查询」`);
-  }, [showToast]);
+  const handleSaveHistoryRecords = useCallback(
+    (newRecords: HistoryRiskRecord[]) => {
+      setHistoryRecords((prev) => [...newRecords, ...prev]);
+      saveHistoryToBackend(newRecords);
+      showToast(`已成功保存 ${newRecords.length} 条数据至「历史出险率配置查询」`);
+    },
+    [showToast]
+  );
 
   const handleClearAllHistory = useCallback(() => {
     setHistoryRecords([]);
+    clearAllHistoryOnBackend();
   }, []);
 
   const handleDeleteHistoryRecord = useCallback((id: string) => {
     setHistoryRecords((prev) => prev.filter((r) => r.id !== id));
+    deleteHistoryRecordOnBackend(id);
   }, []);
 
   const handleDeleteHistoryBatch = useCallback((batchId: string) => {
     setHistoryRecords((prev) => prev.filter((r) => r.batchId !== batchId));
+    deleteHistoryBatchOnBackend(batchId);
   }, []);
 
   // Modals
@@ -199,34 +253,44 @@ export default function App() {
     onConfirm: () => {},
   });
 
-  // Save to localStorage when state changes
+  // Save to SQLite backend and localStorage when state changes
   useEffect(() => {
+    if (!isServerLoadedRef.current) return;
+    syncPrefixRules(prefixRules);
     try {
       localStorage.setItem(STORAGE_KEYS.PREFIX, JSON.stringify(prefixRules));
     } catch {}
   }, [prefixRules]);
 
   useEffect(() => {
+    if (!isServerLoadedRef.current) return;
+    syncPartRules(partRules);
     try {
       localStorage.setItem(STORAGE_KEYS.PARTS, JSON.stringify(partRules));
     } catch {}
   }, [partRules]);
 
   useEffect(() => {
+    if (!isServerLoadedRef.current) return;
+    syncRegions(regionTable);
     try {
       localStorage.setItem(STORAGE_KEYS.REGIONS, JSON.stringify(regionTable));
     } catch {}
   }, [regionTable]);
 
   useEffect(() => {
+    if (!isServerLoadedRef.current) return;
+    syncWorkbench(tableData);
     try {
       localStorage.setItem(STORAGE_KEYS.WORKBENCH, JSON.stringify(tableData));
     } catch {}
   }, [tableData]);
 
   useEffect(() => {
+    if (!isServerLoadedRef.current) return;
+    const obj = Object.fromEntries(ratesMap.entries());
+    syncRates(obj);
     try {
-      const obj = Object.fromEntries(ratesMap.entries());
       localStorage.setItem(STORAGE_KEYS.RATES, JSON.stringify(obj));
     } catch {}
   }, [ratesMap]);
@@ -511,6 +575,7 @@ export default function App() {
         setPrefixRules(DEFAULT_PREFIX_RULES);
         setPartRules(DEFAULT_PART_RULES);
         setRegionTable(DEFAULT_REGIONS);
+        resetDefaultConfigsOnBackend();
         showToast('已成功恢复系统默认规则配置');
       },
     });

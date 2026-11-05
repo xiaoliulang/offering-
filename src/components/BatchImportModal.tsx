@@ -68,7 +68,7 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
         <div className="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white">
-              <Upload className="w-4 h-4" />
+              <Download className="w-4 h-4" />
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900">批量导入 Offering 明细数据</h3>
@@ -103,7 +103,7 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
                 <span>下载模板</span>
               </button>
               <label className="px-3.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors">
-                <FileText className="w-3.5 h-3.5 text-blue-600" />
+                <Download className="w-3.5 h-3.5 text-blue-600" />
                 <span>导入模板</span>
                 <input
                   type="file"
@@ -139,7 +139,7 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   已成功解析预览 ({previewRows.length} 条记录):
                 </span>
-                <span className="text-slate-400">系统已自动完成前缀解码与属性切片</span>
+                <span className="text-slate-400">系统已自动完成简称解码与属性切片</span>
               </div>
 
               <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto">
@@ -191,13 +191,14 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
           <button
             onClick={handleImportSubmit}
             disabled={previewRows.length === 0}
-            className={`px-5 py-2 text-xs font-semibold rounded-lg transition-colors shadow-sm ${
+            className={`px-5 py-2 text-xs font-semibold rounded-lg transition-colors shadow-sm flex items-center gap-1.5 ${
               previewRows.length > 0
                 ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
                 : 'bg-slate-200 text-slate-400 cursor-not-allowed'
             }`}
           >
-            确认导入 ({previewRows.length} 条)
+            <Download className="w-3.5 h-3.5" />
+            <span>确认导入 ({previewRows.length} 条)</span>
           </button>
         </div>
       </div>

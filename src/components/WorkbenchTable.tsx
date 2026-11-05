@@ -188,7 +188,7 @@ export const WorkbenchTable: React.FC<WorkbenchTableProps> = ({
             {warningCount}
           </div>
           <div className="text-[11px] text-slate-400 mt-0.5">
-            {warningCount === 0 ? '全部编码与部件规则已匹配' : '存在未识别前缀或未映射部件'}
+            {warningCount === 0 ? '全部编码与部件规则已匹配' : '存在未识别简称或未映射部件'}
           </div>
         </div>
       </div>

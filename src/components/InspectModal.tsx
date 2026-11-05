@@ -47,7 +47,7 @@ export const InspectModal: React.FC<InspectModalProps> = ({ isOpen, row, onClose
             <div className="bg-slate-900 p-3.5 rounded-xl text-slate-100 font-mono text-center flex items-center justify-center gap-1.5 flex-wrap">
               <div className="bg-blue-900/60 border border-blue-500/50 rounded px-2.5 py-1.5">
                 <div className="text-blue-300 font-bold">{parsed.prefix || '-'}</div>
-                <div className="text-[10px] text-blue-400">前缀映射</div>
+                <div className="text-[10px] text-blue-400">简称映射</div>
               </div>
               <span className="text-slate-500">-</span>
               <div className="bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5">

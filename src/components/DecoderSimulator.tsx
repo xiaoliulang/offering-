@@ -57,13 +57,13 @@ export const DecoderSimulator: React.FC<DecoderSimulatorProps> = ({
               Offering 编码规则实验室与解析引擎
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              测试并直观查看任意 Offering 编码如何由前缀映射、切片截取（期限/次数/销售对象）以及硬件 BU 关联维修部件并最终拆分为出险率行。
+              测试并直观查看任意 Offering 编码如何由简称映射、切片截取（期限/次数/销售对象）以及硬件 BU 关联维修部件并最终拆分为出险率行。
             </p>
           </div>
 
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span>规则库状态:</span>
-            <span className="font-semibold text-slate-700">{prefixRules.length} 个前缀</span>
+            <span className="font-semibold text-slate-700">{prefixRules.length} 个简称</span>
             <span>·</span>
             <span className="font-semibold text-slate-700">{partRules.length} 个部件映射</span>
           </div>
@@ -137,7 +137,7 @@ export const DecoderSimulator: React.FC<DecoderSimulatorProps> = ({
                 {/* Prefix */}
                 <div className="flex-1 bg-blue-950/80 border border-blue-500/40 rounded p-2.5 text-center">
                   <div className="text-blue-300 font-bold text-sm tracking-widest">{parsed.prefix || '(空)'}</div>
-                  <div className="text-[10px] text-blue-400/80 mt-1">前缀 (Prefix)</div>
+                  <div className="text-[10px] text-blue-400/80 mt-1">简称 (Prefix)</div>
                   <div className="text-[9px] text-slate-400 mt-0.5">第一个横杠前</div>
                 </div>
 
@@ -147,7 +147,7 @@ export const DecoderSimulator: React.FC<DecoderSimulatorProps> = ({
                 <div className="flex-1 bg-slate-800 border border-slate-700 rounded p-2.5 text-center">
                   <div className="text-slate-200 font-medium text-sm">{parsed.middle.replace(/^-/, '') || '(主体编码)'}</div>
                   <div className="text-[10px] text-slate-400 mt-1">硬件/内部规格</div>
-                  <div className="text-[9px] text-slate-500 mt-0.5">去除前缀及倒数6位</div>
+                  <div className="text-[9px] text-slate-500 mt-0.5">去除简称及倒数6位</div>
                 </div>
 
                 <span className="text-slate-500 font-bold px-1">-</span>

@@ -8,6 +8,7 @@ import {
 import {
   FileSpreadsheet,
   Download,
+  Upload,
   X,
   Search,
   Sparkles,
@@ -643,9 +644,9 @@ export const RiskTableModal: React.FC<RiskTableModalProps> = ({
             </button>
             <button
               onClick={onExportCSV}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-1.5 shadow-sm"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
             >
-              <Download className="w-4 h-4" />
+              <Upload className="w-4 h-4" />
               <span>下载出险率导入表</span>
             </button>
           </div>

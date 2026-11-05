@@ -183,7 +183,7 @@ export function resolveOfferingRecord(
     (r) => r.prefix.trim().toUpperCase() === prefixMatch
   );
 
-  const lv3 = prefixRule ? prefixRule.lv3 : (data.lv3 || '未匹配前缀');
+  const lv3 = prefixRule ? prefixRule.lv3 : (data.lv3 || '未匹配简称');
   const lv4 = prefixRule ? prefixRule.lv4 : (data.lv4 || '未匹配产品');
 
   // Match Parts Rule based on lv4 + hardwareBU
@@ -211,7 +211,7 @@ export function resolveOfferingRecord(
     validationMsg = '编码长度不足6位，无法截取期限/次数/对象';
   } else if (!prefixRule) {
     status = 'warning';
-    validationMsg = `前缀 [${parsed.prefix}] 未在规则库中配置`;
+    validationMsg = `简称 [${parsed.prefix}] 未在规则库中配置`;
   } else if (parts === '无匹配部件') {
     status = 'warning';
     validationMsg = `未找到 [${lv4}] + [${hardwareBU}] 的维修部件映射`;

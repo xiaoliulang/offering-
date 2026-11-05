@@ -505,7 +505,7 @@ export default function App() {
     setConfirmConfig({
       isOpen: true,
       title: '重置为默认规则',
-      message: '确定将所有映射配置（前缀、部件、区域）恢复为出厂默认设置吗？',
+      message: '确定将所有映射配置（简称、部件、区域）恢复为出厂默认设置吗？',
       confirmText: '重置规则',
       onConfirm: () => {
         setPrefixRules(DEFAULT_PREFIX_RULES);

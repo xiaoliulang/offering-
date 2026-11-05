@@ -118,7 +118,7 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
           {/* Label above textarea */}
           <div className="flex items-center justify-between">
             <label className="text-xs font-semibold text-slate-700">
-              批量数据输入 (支持复制 Excel文本单元格直接粘贴)：
+              批量数据输入（复制“区域、服务offering”、硬件BU、硬件LV3、硬件offering、维修部件/前台展示分类）：
             </label>
           </div>
 

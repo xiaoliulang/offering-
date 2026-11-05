@@ -18,7 +18,6 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Layers,
   Save,
 } from 'lucide-react';
 
@@ -261,9 +260,6 @@ export const RiskTableModal: React.FC<RiskTableModalProps> = ({
                 出险率导入表预览 (共 {riskTableData.length} 行)
               </h2>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              由服务 Offering 明细依据「服务产品 LV4 + 硬件 BU」维修部件映射自动裂变展开，每一项部件作为前台展示分类，供精算/定价团队配置出险率并导出导入表。
-            </p>
           </div>
 
           <div className="flex items-center gap-2.5">
@@ -317,25 +313,6 @@ export const RiskTableModal: React.FC<RiskTableModalProps> = ({
                 </option>
               ))}
             </select>
-
-            {/* Sorting indicator badge */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 font-medium">
-              <Layers className="w-3.5 h-3.5 text-emerald-600" />
-              <span>
-                {sortField === 'region'
-                  ? `默认排序：区域相同聚合 (${sortAsc ? '大区升序' : '大区降序'})`
-                  : `当前排序：${sortField} (${sortAsc ? '升序' : '降序'})`}
-              </span>
-              {sortField !== 'region' && (
-                <button
-                  onClick={handleResetToRegionSort}
-                  className="ml-1 text-emerald-700 hover:text-emerald-900 underline font-semibold cursor-pointer"
-                  title="恢复默认按相同区域排序"
-                >
-                  恢复区域排序
-                </button>
-              )}
-            </div>
           </div>
 
           {/* Actuarial Metrics & Quick Tools */}

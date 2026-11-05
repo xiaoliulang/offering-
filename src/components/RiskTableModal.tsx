@@ -14,7 +14,7 @@ import {
   Check,
   AlertCircle,
   HelpCircle,
-  RotateCcw,
+  Trash2,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -188,11 +188,16 @@ export const RiskTableModal: React.FC<RiskTableModalProps> = ({
   };
 
   const handleClearAllRates = () => {
-    const map: Record<string, string> = {};
-    riskTableData.forEach((r) => {
-      map[r.id] = '';
-    });
-    onBatchSetRates(map);
+    if (filledCount === 0) {
+      return;
+    }
+    if (window.confirm('确定要清空所有已填写的出险率吗？')) {
+      const map: Record<string, string> = {};
+      riskTableData.forEach((r) => {
+        map[r.id] = '';
+      });
+      onBatchSetRates(map);
+    }
   };
 
   const handleSaveCurrentRates = () => {
@@ -352,10 +357,10 @@ export const RiskTableModal: React.FC<RiskTableModalProps> = ({
 
               <button
                 onClick={handleClearAllRates}
-                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                 title="清空所有已填写的出险率"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>

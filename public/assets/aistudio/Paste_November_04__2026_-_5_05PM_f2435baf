@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Offering 维护与出险率导入表生成系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+    <div id="app" class="max-w-[1700px] mx-auto p-6">
+        <!-- 头部导航 -->
+        <header class="bg-white shadow rounded-2xl p-6 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-layer-group text-blue-600"></i> Offering 智能维护与出险率导入系统
+                </h1>
+                <p class="text-sm text-slate-500 mt-1">表格行内直接编辑、价格档位配置、模板下载与批量导入、出险率一键生成</p>
+            </div>
+            <!-- Tab切换 -->
+            <div class="flex bg-slate-100 p-1.5 rounded-xl gap-2 flex-wrap">
+                <button @click="currentTab = 'workbench'" :class="currentTab === 'workbench' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'" class="px-4 py-2 rounded-lg text-sm font-medium transition">
+                    <i class="fa-solid fa-table-cells mr-1.5"></i> 业务处理工作台
+                </button>
+                <button @click="currentTab = 'config_prefix'" :class="currentTab === 'config_prefix' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'" class="px-4 py-2 rounded-lg text-sm font-medium transition">
+                    <i class="fa-solid fa-barcode mr-1.5"></i> Offering前缀映射
+                </button>
+                <button @click="currentTab = 'config_parts'" :class="currentTab === 'config_parts' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'" class="px-4 py-2 rounded-lg text-sm font-medium transition">
+                    <i class="fa-solid fa-wrench mr-1.5"></i> 维修部件映射
+                </button>
+                <button @click="currentTab = 'config_region'" :class="currentTab === 'config_region' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'" class="px-4 py-2 rounded-lg text-sm font-medium transition">
+                    <i class="fa-solid fa-map-location-dot mr-1.5"></i> 区域基础数据
+                </button>
+            </div>
+        </header>
+
+        <!-- Tab 1: 业务处理工作台 -->
+        <div v-show="currentTab === 'workbench'" class="space-y-6">
+            <!-- Offering 明细表主卡片 -->
+            <div class="bg-white rounded-2xl shadow p-6 flex flex-col">
+                <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-table text-blue-600"></i> Offering 明细表 (共 {{ tableData.length }} 条记录)
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-1">提示：所有字段（含硬件Offering、设备价格档位等）均可在表格内**行内直接编辑**。支持新增行、下载模板、批量导入及生成出险率导入表。</p>
+                    </div>
+                    <div class="flex gap-2 flex-wrap">
+                        <button @click="addNewRow" class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2.5 rounded-xl text-sm font-medium transition flex items-center gap-1.5 shadow-sm">
+                            <i class="fa-solid fa-plus"></i> 新增一行
+                        </button>
+                        <button @click="showImportModal = true" class="bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2.5 rounded-xl text-sm font-medium transition flex items-center gap-1.5 shadow-sm">
+                            <i class="fa-solid fa-file-import"></i> 批量导入
+                        </button>
+                        <button @click="openRiskRateModal" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition flex items-center gap-1.5 shadow-sm">
+                            <i class="fa-solid fa-file-invoice-dollar"></i> 生成出险率导入表
+                        </button>
+                        <button @click="exportWorkbenchCSV" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 rounded-xl text-sm font-medium transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-file-excel"></i> 导出明细表
+                        </button>
+                        <button @click="clearTable" class="bg-rose-50 hover:bg-rose-100 text-rose-600 px-3 py-2.5 rounded-xl text-sm font-medium transition">
+                            清空
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto border rounded-xl shadow-inner max-h-[650px]">
+                    <table class="w-full text-left border-collapse text-xs whitespace-nowrap">
+                        <thead class="bg-slate-100 text-slate-700 sticky top-0 z-10 shadow-sm">
+                            <tr>
+                                <th class="p-3 border-b min-w-[130px]">区域</th>
+                                <th class="p-3 border-b min-w-[110px]">服务产品LV3</th>
+                                <th class="p-3 border-b min-w-[140px]">服务产品LV4</th>
+                                <th class="p-3 border-b min-w-[200px]">服务Offering</th>
+                                <th class="p-3 border-b min-w-[110px]">硬件BU</th>
+                                <th class="p-3 border-b min-w-[120px]">硬件LV3</th>
+                                <th class="p-3 border-b min-w-[140px]">硬件Offering</th>
+                                <th class="p-3 border-b min-w-[130px]">设备价格档位(从)</th>
+                                <th class="p-3 border-b min-w-[130px]">设备价格档位(至)</th>
+                                <th class="p-3 border-b text-center min-w-[70px]">期限</th>
+                                <th class="p-3 border-b text-center min-w-[60px]">次数</th>
+                                <th class="p-3 border-b text-center min-w-[60px]">对象</th>
+                                <th class="p-3 border-b min-w-[160px]">维修部件</th>
+                                <th class="p-3 border-b text-center min-w-[70px]">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr v-for="(row, index) in tableData" :key="index" class="hover:bg-slate-50">
+                                <td class="p-2">
+                                    <select v-model="row.region" @change="updateRow(row)" class="border rounded px-2 py-1.5 text-xs bg-white font-semibold text-emerald-600 w-full outline-none">
+                                        <option v-for="reg in regionTable" :key="reg.name" :value="reg.name">{{ reg.name }}</option>
+                                    </select>
+                                </td>
+                                <td class="p-3 text-slate-600">{{ row.lv3 }}</td>
+                                <td class="p-3 font-medium text-blue-600">{{ row.lv4 }}</td>
+                                <td class="p-2">
+                                    <input v-model="row.offering" @input="updateRow(row)" type="text" placeholder="Offering编码" class="border rounded px-2 py-1.5 text-xs font-mono w-full outline-none focus:ring-1 focus:ring-blue-500">
+                                </td>
+                                <td class="p-2">
+                                    <input v-model="row.hardwareBU" @input="updateRow(row)" type="text" placeholder="硬件BU" class="border rounded px-2 py-1.5 text-xs w-full outline-none focus:ring-1 focus:ring-blue-500">
+                                </td>
+                                <td class="p-2">
+                                    <input v-model="row.hardwareLV3" type="text" placeholder="选填" class="border rounded px-2 py-1.5 text-xs w-full outline-none focus:ring-1 focus:ring-blue-500">
+                                </td>
+                                <td class="p-2">
+                                    <input v-model="row.hardwareOffering" type="text" placeholder="选填" class="border rounded px-2 py-1.5 text-xs font-mono w-full outline-none focus:ring-1 focus:ring-blue-500">
+                                </td>
+                                <td class="p-2">
+                                    <input v-model="row.priceFrom" type="text" placeholder="例如: 0" class="border rounded px-2 py-1.5 text-xs w-full outline-none focus:ring-1 focus:ring-blue-500">
+                                </td>
+                                <td class="p-2">
+                                    <input v-model="row.priceTo" type="text" placeholder="例如: 5000" class="border rounded px-2 py-1.5 text-xs w-full outline-none focus:ring-1 focus:ring-blue-500">
+                                </td>
+                                <td class="p-3 text-center font-medium">{{ row.term }}</td>
+                                <td class="p-3 text-center font-medium">{{ row.count }}</td>
+                                <td class="p-3 text-center font-bold text-indigo-600">{{ row.target }}</td>
+                                <td class="p-3 text-rose-600 font-medium">{{ row.parts }}</td>
+                                <td class="p-3 text-center">
+                                    <button @click="removeRow(index)" class="text-slate-400 hover:text-rose-600" title="删除行">
+                                        <i class="fa-solid fa-trash-can text-sm"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr v-if="tableData.length === 0">
+                                <td colspan="14" class="p-12 text-center text-slate-400">
+                                    暂无数据，请点击上方“新增一行”或“批量导入”开始操作
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 弹窗：批量导入与模板下载 -->
+        <div v-if="showImportModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col overflow-hidden">
+                <div class="p-6 border-b flex justify-between items-center bg-slate-50">
+                    <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-file-import text-blue-600"></i> 批量导入 Offering 明细
+                    </h3>
+                    <button @click="showImportModal = false" class="text-slate-400 hover:text-slate-600">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div class="flex justify-between items-center bg-blue-50/60 p-3 rounded-xl border border-blue-100">
+                        <span class="text-xs text-blue-800">需要标准导入格式？您可以直接下载 CSV 模板参考填写。</span>
+                        <button @click="downloadTemplate" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1">
+                            <i class="fa-solid fa-download"></i> 下载导入模板
+                        </button>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">粘贴导入数据 (格式: 区域,Offering编码,硬件BU,硬件LV3,硬件Offering,设备价格档位(从),设备价格档位(至))</label>
+                        <textarea v-model="batchInput" rows="6" placeholder="华东大区, ASDW-Hope-1AY121CAB, Hope, 笔记本, HW-01, 0, 5000&#10;华北大区, CAP-Hope-1AY121CBN, Hope, 台式机, HW-02, 5001, 10000" class="w-full border rounded-xl p-3 text-xs font-mono focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button @click="showImportModal = false" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-xl text-sm">取消</button>
+                        <button @click="processBatch" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-sm font-medium">确认导入</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 弹窗：出险率导入表预览 -->
+        <div v-if="showRiskModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+                <div class="p-6 border-b flex justify-between items-center bg-slate-50">
+                    <div>
+                        <h3 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-file-invoice-dollar text-indigo-600"></i> 出险率导入表预览 (共 {{ riskTableData.length }} 行)
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-0.5">字段包含设备价格档位(从/至)及硬件offering之后的位置，多部件维修项已自动拆分为多行。</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="exportRiskCSV" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-file-excel"></i> 下载出险率导入表 (CSV)
+                        </button>
+                        <button @click="showRiskModal = false" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition">
+                            关闭
+                        </button>
+                    </div>
+                </div>
+                <div class="p-6 flex-1 overflow-auto">
+                    <table class="w-full text-left border-collapse text-xs whitespace-nowrap">
+                        <thead class="bg-slate-100 text-slate-700 sticky top-0">
+                            <tr>
+                                <th class="p-3 border-b">区域</th>
+                                <th class="p-3 border-b">服务产品LV3</th>
+                                <th class="p-3 border-b">服务产品LV4</th>
+                                <th class="p-3 border-b">服务offering</th>
+                                <th class="p-3 border-b">硬件BU</th>
+                                <th class="p-3 border-b">硬件LV3</th>
+                                <th class="p-3 border-b">硬件offering</th>
+                                <th class="p-3 border-b">设备价格档位(从)</th>
+                                <th class="p-3 border-b">设备价格档位(至)</th>
+                                <th class="p-3 border-b">销售对象</th>
+                                <th class="p-3 border-b text-center">期限(月)</th>
+                                <th class="p-3 border-b text-center">次数(次)</th>
+                                <th class="p-3 border-b text-blue-600 font-bold">前台展示分类</th>
+                                <th class="p-3 border-b text-indigo-600 font-bold">出险率 (可填写)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr v-for="(item, index) in riskTableData" :key="index" class="hover:bg-slate-50">
+                                <td class="p-3 font-semibold text-emerald-600">{{ item.region }}</td>
+                                <td class="p-3">{{ item.lv3 }}</td>
+                                <td class="p-3 font-medium text-blue-600">{{ item.lv4 }}</td>
+                                <td class="p-3 font-mono text-[11px]">{{ item.offering }}</td>
+                                <td class="p-3">{{ item.hardwareBU }}</td>
+                                <td class="p-3">{{ item.hardwareLV3 || '-' }}</td>
+                                <td class="p-3 font-mono">{{ item.hardwareOffering || '-' }}</td>
+                                <td class="p-3 text-center">{{ item.priceFrom || '-' }}</td>
+                                <td class="p-3 text-center">{{ item.priceTo || '-' }}</td>
+                                <td class="p-3 text-center font-bold text-indigo-600">{{ item.target }}</td>
+                                <td class="p-3 text-center">{{ item.term }}</td>
+                                <td class="p-3 text-center">{{ item.count }}</td>
+                                <td class="p-3 font-bold text-blue-600 bg-blue-50/50">{{ item.displayCategory }}</td>
+                                <td class="p-2">
+                                    <input v-model="item.riskRate" type="text" placeholder="例: 0.05" class="border rounded px-2 py-1 text-xs w-full outline-none focus:ring-1 focus:ring-indigo-500 bg-amber-50/30">
+                                </td>
+                            </tr>
+                            <tr v-if="riskTableData.length === 0">
+                                <td colspan="14" class="p-8 text-center text-slate-400">
+                                    暂无数据可生成，请先在明细表添加记录。
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 2: Offering前缀映射表配置 -->
+        <div v-show="currentTab === 'config_prefix'" class="bg-white rounded-2xl shadow p-6 space-y-4">
+            <div class="flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-slate-800">服务 Offering 前缀与产品映射配置</h2>
+                <button @click="addPrefixRule" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm">
+                    <i class="fa-solid fa-plus mr-1"></i> 新增规则
+                </button>
+            </div>
+            <div class="border rounded-xl overflow-hidden">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-100 text-slate-700">
+                        <tr>
+                            <th class="p-3">前缀 (如 ASDW)</th>
+                            <th class="p-3">服务产品LV3</th>
+                            <th class="p-3">服务产品LV4</th>
+                            <th class="p-3 text-center">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        <tr v-for="(item, index) in prefixRules" :key="index">
+                            <td class="p-3"><input v-model="item.prefix" class="border rounded px-2 py-1 w-full uppercase font-mono"></td>
+                            <td class="p-3"><input v-model="item.lv3" class="border rounded px-2 py-1 w-full"></td>
+                            <td class="p-3"><input v-model="item.lv4" class="border rounded px-2 py-1 w-full"></td>
+                            <td class="p-3 text-center">
+                                <button @click="prefixRules.splice(index, 1)" class="text-rose-500 hover:text-rose-700"><i class="fa-solid fa-trash"></i></button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tab 3: 维修部件映射表配置 -->
+        <div v-show="currentTab === 'config_parts'" class="bg-white rounded-2xl shadow p-6 space-y-4">
+            <div class="flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-slate-800">服务产品LV4 + 硬件BU 维修部件映射配置</h2>
+                <button @click="addPartRule" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm">
+                    <i class="fa-solid fa-plus mr-1"></i> 新增规则
+                </button>
+            </div>
+            <div class="border rounded-xl overflow-hidden">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-100 text-slate-700">
+                        <tr>
+                            <th class="p-3">服务产品LV4</th>
+                            <th class="p-3">硬件BU</th>
+                            <th class="p-3">维修部件 (逗号分隔)</th>
+                            <th class="p-3 text-center">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        <tr v-for="(item, index) in partRules" :key="index">
+                            <td class="p-3"><input v-model="item.lv4" class="border rounded px-2 py-1 w-full"></td>
+                            <td class="p-3"><input v-model="item.bu" class="border rounded px-2 py-1 w-full"></td>
+                            <td class="p-3"><input v-model="item.parts" class="border rounded px-2 py-1 w-full"></td>
+                            <td class="p-3 text-center">
+                                <button @click="partRules.splice(index, 1)" class="text-rose-500 hover:text-rose-700"><i class="fa-solid fa-trash"></i></button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tab 4: 区域基础数据表配置 -->
+        <div v-show="currentTab === 'config_region'" class="bg-white rounded-2xl shadow p-6 space-y-4">
+            <div class="flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-slate-800">区域基础数据表</h2>
+                <div class="flex gap-2">
+                    <button @click="addRegionRow" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm">
+                        <i class="fa-solid fa-plus mr-1"></i> 新增区域
+                    </button>
+                    <button @click="showRegionImport = !showRegionImport" class="bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded-lg text-sm">
+                        <i class="fa-solid fa-file-import mr-1"></i> 批量导入区域
+                    </button>
+                </div>
+            </div>
+
+            <div v-if="showRegionImport" class="bg-slate-50 border p-4 rounded-xl space-y-2">
+                <label class="block text-sm font-medium text-slate-700">批量导入区域 (每行格式: 区域名称, 备注说明)</label>
+                <textarea v-model="batchRegionText" rows="3" placeholder="华东大区, 核心大区&#10;华北大区, 核心大区" class="w-full border rounded-lg p-2 text-xs font-mono"></textarea>
+                <button @click="importRegions" class="bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-sm">确认导入</button>
+            </div>
+
+            <div class="border rounded-xl overflow-hidden">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-100 text-slate-700">
+                        <tr>
+                            <th class="p-3">区域</th>
+                            <th class="p-3">备注说明</th>
+                            <th class="p-3 text-center">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        <tr v-for="(item, index) in regionTable" :key="index">
+                            <td class="p-3"><input v-model="item.name" class="border rounded px-2 py-1 w-full" placeholder="例如：华东大区"></td>
+                            <td class="p-3"><input v-model="item.remark" class="border rounded px-2 py-1 w-full" placeholder="备注"></td>
+                            <td class="p-3 text-center">
+                                <button @click="regionTable.splice(index, 1)" class="text-rose-500 hover:text-rose-700"><i class="fa-solid fa-trash"></i></button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive } = Vue;
+
+        createApp({
+            setup() {
+                const currentTab = ref('workbench');
+                const showRegionImport = ref(false);
+                const showImportModal = ref(false);
+                const showRiskModal = ref(false);
+                const batchRegionText = ref('');
+                const batchInput = ref('');
+
+                const prefixRules = ref([
+                    { prefix: 'ASDW', lv3: '保险服务', lv4: '华为碎屏服务宝' },
+                    { prefix: 'CAP', lv3: '保险服务', lv4: '华为碎屏服务宝' },
+                    { prefix: 'BCAI', lv3: '保险服务', lv4: '华为碎屏服务宝' },
+                    { prefix: 'WDP', lv3: '保险服务', lv4: '华为碎屏服务宝' }
+                ]);
+
+                const partRules = ref([
+                    { lv4: '华为碎屏服务宝', bu: 'Hope', parts: '前壳,外屏' }
+                ]);
+
+                const regionTable = ref([
+                    { name: '华东大区', remark: '核心大区' },
+                    { name: '华北大区', remark: '核心大区' },
+                    { name: '华南大区', remark: '核心大区' }
+                ]);
+
+                const tableData = ref([
+                    {
+                        region: '华东大区',
+                        lv3: '保险服务',
+                        lv4: '华为碎屏服务宝',
+                        offering: 'ASDW-Hope-1AY121CAB',
+                        hardwareBU: 'Hope',
+                        hardwareLV3: '笔记本',
+                        hardwareOffering: 'HW-OFF-01',
+                        priceFrom: '0',
+                        priceTo: '5000',
+                        term: '12',
+                        count: '1',
+                        target: 'C',
+                        parts: '前壳,外屏'
+                    }
+                ]);
+
+                const riskTableData = ref([]);
+
+                function parseOfferingString(s) {
+                    if (!s || s.length < 6) return { term: '', count: '', target: '' };
+                    return {
+                        term: s.slice(-6, -4),
+                        count: s.slice(-4, -3),
+                        target: s.slice(-3, -2)
+                    };
+                }
+
+                function resolveRecord(region, offeringStr, hardwareBU, hardwareLV3, hardwareOffering, priceFrom, priceTo) {
+                    const parsed = parseOfferingString(offeringStr);
+                    const prefixMatch = offeringStr.split('-')[0] || '';
+                    
+                    const prefixRule = prefixRules.value.find(r => r.prefix.toUpperCase() === prefixMatch.toUpperCase());
+                    const lv3 = prefixRule ? prefixRule.lv3 : '未匹配';
+                    const lv4 = prefixRule ? prefixRule.lv4 : '未匹配';
+
+                    const partRule = partRules.value.find(r => r.lv4 === lv4 && r.bu.toLowerCase() === hardwareBU.toLowerCase());
+                    const parts = partRule ? partRule.parts : '无匹配部件';
+
+                    return {
+                        region: region || '华东大区',
+                        lv3,
+                        lv4,
+                        offering: offeringStr || '',
+                        hardwareBU: hardwareBU || 'Hope',
+                        hardwareLV3: hardwareLV3 || '',
+                        hardwareOffering: hardwareOffering || '',
+                        priceFrom: priceFrom || '',
+                        priceTo: priceTo || '',
+                        term: parsed.term,
+                        count: parsed.count,
+                        target: parsed.target,
+                        parts: parts
+                    };
+                }
+
+                function updateRow(row) {
+                    const updated = resolveRecord(row.region, row.offering, row.hardwareBU, row.hardwareLV3, row.hardwareOffering, row.priceFrom, row.priceTo);
+                    row.lv3 = updated.lv3;
+                    row.lv4 = updated.lv4;
+                    row.term = updated.term;
+                    row.count = updated.count;
+                    row.target = updated.target;
+                    row.parts = updated.parts;
+                }
+
+                function addNewRow() {
+                    const res = resolveRecord('华东大区', '', 'Hope', '', '', '', '');
+                    tableData.value.push(res);
+                }
+
+                function processBatch() {
+                    if (!batchInput.value) return;
+                    const lines = batchInput.value.split('\n');
+                    lines.forEach(line => {
+                        const parts = line.split(',').map(p => p.trim());
+                        if (parts.length >= 2) {
+                            const reg = parts[0];
+                            const off = parts[1];
+                            const bu = parts[2] || 'Hope';
+                            const hwLv3 = parts[3] || '';
+                            const hwOff = parts[4] || '';
+                            const pFrom = parts[5] || '';
+                            const pTo = parts[6] || '';
+                            const res = resolveRecord(reg, off, bu, hwLv3, hwOff, pFrom, pTo);
+                            tableData.value.push(res);
+                        }
+                    });
+                    batchInput.value = '';
+                    showImportModal.value = false;
+                }
+
+                function removeRow(index) {
+                    tableData.value.splice(index, 1);
+                }
+
+                function clearTable() {
+                    tableData.value = [];
+                }
+
+                function downloadTemplate() {
+                    const csvContent = '区域,Offering编码,硬件BU,硬件LV3,硬件Offering,设备价格档位(从),设备价格档位(至)\n华东大区,ASDW-Hope-1AY121CAB,Hope,笔记本,HW-OFF-01,0,5000\n华北大区,CAP-Hope-1AY121CBN,Hope,台式机,HW-OFF-02,5001,10000';
+                    downloadCSV(csvContent, 'offering_import_template.csv');
+                }
+
+                function openRiskModal() {
+                    const expandedRows = [];
+                    tableData.value.forEach(row => {
+                        const partsList = row.parts ? row.parts.split(',').map(p => p.trim()) : [''];
+                        partsList.forEach(part => {
+                            expandedRows.push({
+                                region: row.region,
+                                lv3: row.lv3,
+                                lv4: row.lv4,
+                                offering: row.offering,
+                                hardwareBU: row.hardwareBU,
+                                hardwareLV3: row.hardwareLV3,
+                                hardwareOffering: row.hardwareOffering,
+                                priceFrom: row.priceFrom,
+                                priceTo: row.priceTo,
+                                target: row.target,
+                                term: row.term,
+                                count: row.count,
+                                displayCategory: part,
+                                riskRate: ''
+                            });
+                        });
+                    });
+                    riskTableData.value = expandedRows;
+                    showRiskModal.value = true;
+                }
+
+                function exportWorkbenchCSV() {
+                    let csv = '区域,服务产品LV3,服务产品LV4,服务offering,硬件BU,硬件LV3,硬件offering,设备价格档位(从),设备价格档位(至),有效期限(月),次数(次),销售对象,维修部件\n';
+                    tableData.value.forEach(row => {
+                        csv += `"${row.region}","${row.lv3}","${row.lv4}","${row.offering}","${row.hardwareBU}","${row.hardwareLV3}","${row.hardwareOffering}","${row.priceFrom}","${row.priceTo}","${row.term}","${row.count}","${row.target}","${row.parts}"\n`;
+                    });
+                    downloadCSV(csv, 'offering_workbench_result.csv');
+                }
+
+                function exportRiskCSV() {
+                    let csv = '区域,服务产品LV3,服务产品LV4,服务offering,硬件BU,硬件LV3,硬件offering,设备价格档位(从),设备价格档位(至),销售对象,期限(月),次数(次),前台展示分类,出险率\n';
+                    riskTableData.value.forEach(row => {
+                        csv += `"${row.region}","${row.lv3}","${row.lv4}","${row.offering}","${row.hardwareBU}","${row.hardwareLV3}","${row.hardwareOffering}","${row.priceFrom}","${row.priceTo}","${row.target}","${row.term}","${row.count}","${row.displayCategory}","${row.riskRate}"\n`;
+                    });
+                    downloadCSV(csv, 'risk_rate_import_table.csv');
+                }
+
+                function downloadCSV(csvContent, filename) {
+                    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(blob);
+                    link.download = filename;
+                    link.click();
+                }
+
+                function addPrefixRule() { prefixRules.value.push({ prefix: '', lv3: '', lv4: '' }); }
+                function addPartRule() { partRules.value.push({ lv4: '', bu: '', parts: '' }); }
+                function addRegionRow() { regionTable.value.push({ name: '', remark: '' }); }
+                function importRegions() {
+                    if (!batchRegionText.value) return;
+                    const lines = batchRegionText.value.split('\n');
+                    lines.forEach(line => {
+                        const p = line.split(',').map(x => x.trim());
+                        if (p[0]) regionTable.value.push({ name: p[0], remark: p[1] || '' });
+                    });
+                    batchRegionText.value = '';
+                    showRegionImport.value = false;
+                }
+
+                return {
+                    currentTab,
+                    showRegionImport,
+                    showImportModal,
+                    showRiskModal,
+                    batchRegionText,
+                    batchInput,
+                    prefixRules,
+                    partRules,
+                    regionTable,
+                    tableData,
+                    riskTableData,
+                    addNewRow,
+                    processBatch,
+                    updateRow,
+                    removeRow,
+                    clearTable,
+                    downloadTemplate,
+                    openRiskModal,
+                    exportWorkbenchCSV,
+                    exportRiskCSV,
+                    addPrefixRule,
+                    addPartRule,
+                    addRegionRow,
+                    importRegions
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

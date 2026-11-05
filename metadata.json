@@ -1,0 +1,6 @@
+{
+  "name": "Offering 维护与出险率导入系统",
+  "description": "专业级硬件服务 Offering 维护、编码智能解析、部件拆分与精算运营出险率导入表生成系统",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

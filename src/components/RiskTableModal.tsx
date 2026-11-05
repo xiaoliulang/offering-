@@ -538,7 +538,7 @@ export const RiskTableModal: React.FC<RiskTableModalProps> = ({
                             <div className="flex items-center gap-2">
                               <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block shadow-2xs"></span>
                               <span className="font-bold text-emerald-950 text-xs">
-                                区域相同聚合分组：【{row.region}】
+                                【{row.region}】
                               </span>
                               <span className="text-[11px] px-2 py-0.5 rounded-full bg-white text-emerald-800 font-medium border border-emerald-200 shadow-2xs">
                                 本区域共 {regionGroupCount} 条部件记录

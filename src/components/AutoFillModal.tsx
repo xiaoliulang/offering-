@@ -117,10 +117,17 @@ export const AutoFillModal: React.FC<AutoFillModalProps> = ({
 
       if (result.isCloud) {
         setFeedbackInfo(result.message);
+        // 在浏览器中自动打开华为目标页面
+        window.open('https://cbg.huawei.com/#/group/finance/service_iprice_configuration', '_blank');
+        onTriggerToast('📦 已自动下载最新 Excel 表格并打开目标页面！');
         return;
       }
 
-      throw new Error(result.error || `服务响应异常 (HTTP ${response.status})`);
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      throw new Error(`服务响应异常 (HTTP ${response.status})`);
     } catch (err: any) {
       console.error('Failed to trigger auto fill:', err);
       alert(`自动化填充执行失败: ${err.message || '未知异常'}`);

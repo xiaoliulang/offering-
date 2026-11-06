@@ -38,6 +38,21 @@ async function executePlaywrightAutoFill(excelFilePath: string) {
     edgePath = 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe';
   }
 
+  // 1. 检查是否在具备 Edge 的 Windows 环境下运行
+  const isWindows = process.platform === 'win32';
+  const hasEdge = fs.existsSync(edgePath) || fs.existsSync('C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe');
+
+  if (!isWindows || !hasEdge) {
+    console.log('[Playwright Engine] 检测到当前处于云端容器或非 Windows 环境，未找到本地 Edge。');
+    return {
+      isCloud: true,
+      message:
+        '已成功生成标准格式 Excel 文件并自动保存！\n\n' +
+        '【提示】：当前页面运行在云端预览环境（Linux），无法直接穿透控制您办公电脑桌面的 Edge 浏览器。\n' +
+        '当您在本地电脑运行本项目（npm run dev）时，点击此按钮将直接拉起您电脑上的 Edge 自动完成填报！',
+    };
+  }
+
   // 探测用户配置目录（支持自动获取当前用户目录或默认指定目录）
   const userProfile = process.env.USERPROFILE || 'C:\\Users\\y00656362';
   let profileDir = path.join(userProfile, 'AppData', 'Local', 'Microsoft', 'Edge', 'User Data');
@@ -50,7 +65,7 @@ async function executePlaywrightAutoFill(excelFilePath: string) {
   console.log('[Playwright Engine] 目标 URL:', targetUrl);
   console.log('[Playwright Engine] 注入目标表格:', excelFilePath);
 
-  // 1. 在 Windows 环境下清理残留 edge 进程，确保 9222 调试端口可绑定
+  // 2. 在 Windows 环境下清理残留 edge 进程，确保 9222 调试端口可绑定
   try {
     await execAsync('taskkill /f /im msedge.exe');
   } catch {
@@ -58,13 +73,17 @@ async function executePlaywrightAutoFill(excelFilePath: string) {
   }
   await new Promise((r) => setTimeout(r, 1500));
 
-  // 2. 拉起带远程调试端口 9222 的 Edge 浏览器，继承用户的登录态
+  // 3. 拉起带远程调试端口 9222 的 Edge 浏览器，继承用户的登录态
   console.log('[Playwright Engine] 正在拉起带 9222 调试端口的 Edge...');
   const edgeProc = spawn(
     edgePath,
     ['--remote-debugging-port=9222', `--user-data-dir=${profileDir}`, targetUrl],
     { detached: true, stdio: 'ignore' }
   );
+
+  edgeProc.on('error', (procErr) => {
+    console.warn('[Playwright Engine] Edge 进程启动异常 (已捕获):', procErr.message);
+  });
   edgeProc.unref();
 
   console.log('[Playwright Engine] 等待 3.5 秒确保 Edge 调试服务就绪...');
@@ -171,7 +190,14 @@ async function startServer() {
 
       // 在当前系统（本地机器）执行 Playwright 流程
       try {
-        await executePlaywrightAutoFill(EXPORT_FILE_PATH);
+        const result = await executePlaywrightAutoFill(EXPORT_FILE_PATH);
+        if (result && typeof result === 'object' && (result as any).isCloud) {
+          return res.json({
+            success: false,
+            isCloud: true,
+            message: (result as any).message,
+          });
+        }
         res.json({
           success: true,
           message: '步骤 1~4 已全部自动执行完成！已在 Edge 中拉起并装填数据，请核对后手动点击【保存】。',

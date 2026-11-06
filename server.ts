@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import {
@@ -21,6 +22,8 @@ const __dirname = path.dirname(__filename);
 
 const isProduction = process.env.NODE_ENV === 'production';
 const PORT = parseInt(process.env.PORT || '3000', 10);
+const EXPORT_DIR = path.resolve(process.cwd(), 'data');
+const EXPORT_FILE_PATH = path.join(EXPORT_DIR, 'latest_workbench_export.xlsx');
 
 async function startServer() {
   const app = express();
@@ -28,11 +31,58 @@ async function startServer() {
   // Initialize SQLite database and tables
   initDatabase();
 
+  // CORS Middleware to allow Tampermonkey script on cbg.huawei.com to fetch export data
+  app.use((_req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    if (_req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   // JSON Body Parser with ample limit for large offering batches
-  app.use(express.json({ limit: '20mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   // API Endpoints
+  // Endpoint to save latest Excel export file (Base64 JSON)
+  app.post('/api/workbench/latest-export', (req, res) => {
+    try {
+      const { base64, filename } = req.body;
+      if (!base64) {
+        return res.status(400).json({ success: false, error: 'Missing base64 data' });
+      }
+      const buffer = Buffer.from(base64, 'base64');
+      if (!fs.existsSync(EXPORT_DIR)) {
+        fs.mkdirSync(EXPORT_DIR, { recursive: true });
+      }
+      fs.writeFileSync(EXPORT_FILE_PATH, buffer);
+      console.log(`[AutoFill] Saved latest export file (${buffer.length} bytes): ${filename || 'latest_workbench_export.xlsx'}`);
+      res.json({ success: true, size: buffer.length, timestamp: Date.now() });
+    } catch (err: any) {
+      console.error('Failed to save latest export:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Endpoint for Tampermonkey or external scripts to download latest Excel export
+  app.get('/api/workbench/latest-export.xlsx', (_req, res) => {
+    try {
+      if (fs.existsSync(EXPORT_FILE_PATH)) {
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="latest_workbench_export.xlsx"');
+        res.sendFile(EXPORT_FILE_PATH);
+      } else {
+        res.status(404).json({ success: false, error: '暂无可用的最新导出表格，请先在工作台点击「自动化填充」' });
+      }
+    } catch (err: any) {
+      console.error('Failed to serve latest export:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   app.get('/api/data', (_req, res) => {
     try {
       const data = getAllData();

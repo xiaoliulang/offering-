@@ -41,6 +41,7 @@ import { BatchImportModal } from './components/BatchImportModal';
 import { InspectModal } from './components/InspectModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { HistoryRiskQueryView } from './components/HistoryRiskQueryView';
+import { AutoFillModal } from './components/AutoFillModal';
 
 const STORAGE_KEYS = {
   PREFIX: 'offering_system_prefix_rules_v1',
@@ -239,6 +240,7 @@ export default function App() {
   // Modals
   const [showImportModal, setShowImportModal] = useState(false);
   const [showRiskModal, setShowRiskModal] = useState(false);
+  const [showAutoFillModal, setShowAutoFillModal] = useState(false);
   const [inspectRow, setInspectRow] = useState<OfferingRow | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{
     isOpen: boolean;
@@ -650,6 +652,7 @@ export default function App() {
             onClearTable={handleClearTable}
             onOpenImportModal={() => setShowImportModal(true)}
             onOpenRiskModal={() => setShowRiskModal(true)}
+            onOpenAutoFillModal={() => setShowAutoFillModal(true)}
             onExportCSV={handleExportWorkbenchCSV}
             onExportExcel={handleExportWorkbenchExcel}
             onDownloadTemplate={handleDownloadTemplate}
@@ -705,6 +708,13 @@ export default function App() {
         onBatchSetRates={handleBatchSetRates}
         onExportCSV={handleExportRiskCSV}
         onSaveHistory={handleSaveHistoryRecords}
+      />
+
+      <AutoFillModal
+        isOpen={showAutoFillModal}
+        onClose={() => setShowAutoFillModal(false)}
+        tableData={tableData}
+        onTriggerToast={showToast}
       />
 
       <InspectModal

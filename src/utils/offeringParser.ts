@@ -367,14 +367,14 @@ export function downloadCSV(content: string, filename: string): void {
 }
 
 /**
- * Downloads a styled native Excel file (.xlsx) with header styling, borders, and OpenXML encoding
+/**
+ * Generates Excel buffer with styling and OpenXML encoding
  */
-export async function downloadExcelTable(
+export async function generateExcelBuffer(
   headers: { title: string; required?: boolean }[],
   rows: (string | number)[][],
-  filename: string,
   sheetName = '标准数据表'
-): Promise<void> {
+): Promise<Uint8Array> {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(sheetName);
 
@@ -442,9 +442,21 @@ export async function downloadExcelTable(
     column.width = maxLength + 4;
   });
 
-  // Generate buffer and trigger download in browser
   const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
+  return new Uint8Array(buffer);
+}
+
+/**
+ * Downloads a styled native Excel file (.xlsx) with header styling, borders, and OpenXML encoding
+ */
+export async function downloadExcelTable(
+  headers: { title: string; required?: boolean }[],
+  rows: (string | number)[][],
+  filename: string,
+  sheetName = '标准数据表'
+): Promise<void> {
+  const buffer = await generateExcelBuffer(headers, rows, sheetName);
+  const blob = new Blob([buffer as any], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
   const url = URL.createObjectURL(blob);

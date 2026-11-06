@@ -17,6 +17,7 @@ import {
   Eye,
   Layers,
   ChevronDown,
+  Sparkles,
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
 import { WorkbenchAnalytics } from './WorkbenchAnalytics';
@@ -31,6 +32,7 @@ interface WorkbenchTableProps {
   onClearTable: () => void;
   onOpenImportModal: () => void;
   onOpenRiskModal: () => void;
+  onOpenAutoFillModal?: () => void;
   onExportCSV: () => void;
   onExportExcel?: () => void;
   onDownloadTemplate: () => void;
@@ -50,6 +52,7 @@ export const WorkbenchTable: React.FC<WorkbenchTableProps> = ({
   onClearTable,
   onOpenImportModal,
   onOpenRiskModal,
+  onOpenAutoFillModal,
   onExportCSV,
   onExportExcel,
   onDownloadTemplate,
@@ -278,6 +281,16 @@ export const WorkbenchTable: React.FC<WorkbenchTableProps> = ({
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span>生成出险率导入表</span>
+            </button>
+
+            {/* 预览与自动填充 */}
+            <button
+              onClick={onOpenAutoFillModal}
+              className="px-3.5 py-1.5 text-xs font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 active:from-purple-800 active:to-indigo-800 rounded-lg transition-all shadow-sm hover:shadow-md flex items-center gap-1.5 cursor-pointer"
+              title="预览明细数据并一键自动联动填充到华为价格配置系统"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>预览与自动填充</span>
             </button>
 
             {/* Export Dropdown with Excel & CSV */}

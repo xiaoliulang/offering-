@@ -372,13 +372,14 @@ export function downloadCSV(content: string, filename: string): void {
 export async function downloadExcelTable(
   headers: { title: string; required?: boolean }[],
   rows: (string | number)[][],
-  filename: string
+  filename: string,
+  sheetName = '标准数据表'
 ): Promise<void> {
   const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('标准出险率导入表');
+  const worksheet = workbook.addWorksheet(sheetName);
 
   // Add header row
-  const headerTitles = headers.map((h) => `${h.required ? '*' : ''}${h.title}`);
+  const headerTitles = headers.map((h) => `${h.required && !h.title.startsWith('*') ? '*' : ''}${h.title}`);
   const headerRow = worksheet.addRow(headerTitles);
 
   // Style header row

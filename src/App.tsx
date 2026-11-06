@@ -506,12 +506,50 @@ export default function App() {
       return;
     }
     let csv =
-      '服务产品LV3,服务产品LV4,服务offering,硬件BU,硬件LV3,硬件offering,设备价格档位(从),设备价格档位(至),有效期限(月),次数(次),销售对象,维修部件\n';
+      '*服务产品LV3,*服务产品LV4,*服务Offering,*硬件BU,硬件LV3,硬件Offering,设备价格档位（从）,设备价格档位（至）,*有效期（月）,*次数（次）,*销售对象,*维修部件\n';
     tableData.forEach((row) => {
-      csv += `"${row.lv3}","${row.lv4}","${row.offering}","${row.hardwareBU}","${row.hardwareLV3}","${row.hardwareOffering}","${row.priceFrom}","${row.priceTo}","${row.term}","${row.count}","${row.target}","${row.parts}"\n`;
+      csv += `"${row.lv3 || ''}","${row.lv4 || ''}","${row.offering || ''}","${row.hardwareBU || ''}","${row.hardwareLV3 || ''}","${row.hardwareOffering || ''}","${row.priceFrom || ''}","${row.priceTo || ''}","${row.term || ''}","${row.count || ''}","${row.target || ''}","${row.parts || ''}"\n`;
     });
     downloadCSV(csv, `offering_workbench_${new Date().toISOString().slice(0, 10)}.csv`);
-    showToast('已下载 Offering 明细表 (CSV)');
+    showToast('已下载 Offering 明细表 (.csv)');
+  }, [tableData, showToast]);
+
+  // Export Workbench Excel (.xlsx)
+  const handleExportWorkbenchExcel = useCallback(() => {
+    if (tableData.length === 0) {
+      alert('当前工作台暂无数据可导出');
+      return;
+    }
+    const headers = [
+      { title: '*服务产品LV3' },
+      { title: '*服务产品LV4' },
+      { title: '*服务Offering' },
+      { title: '*硬件BU' },
+      { title: '硬件LV3' },
+      { title: '硬件Offering' },
+      { title: '设备价格档位（从）' },
+      { title: '设备价格档位（至）' },
+      { title: '*有效期（月）' },
+      { title: '*次数（次）' },
+      { title: '*销售对象' },
+      { title: '*维修部件' },
+    ];
+    const rows = tableData.map((row) => [
+      row.lv3 || '',
+      row.lv4 || '',
+      row.offering || '',
+      row.hardwareBU || '',
+      row.hardwareLV3 || '',
+      row.hardwareOffering || '',
+      row.priceFrom || '',
+      row.priceTo || '',
+      row.term || '',
+      row.count || '',
+      row.target || '',
+      row.parts || '',
+    ]);
+    downloadExcelTable(headers, rows, `offering_workbench_${new Date().toISOString().slice(0, 10)}.xlsx`, 'Offering明细表');
+    showToast('已下载 Offering 明细表 (.xlsx)');
   }, [tableData, showToast]);
 
   // Export Risk CSV/Excel
@@ -613,6 +651,7 @@ export default function App() {
             onOpenImportModal={() => setShowImportModal(true)}
             onOpenRiskModal={() => setShowRiskModal(true)}
             onExportCSV={handleExportWorkbenchCSV}
+            onExportExcel={handleExportWorkbenchExcel}
             onDownloadTemplate={handleDownloadTemplate}
             onInspectRow={(r) => setInspectRow(r)}
             onBatchDelete={handleBatchDelete}

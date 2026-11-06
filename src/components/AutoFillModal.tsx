@@ -40,8 +40,8 @@ export const EXPORT_HEADERS = [
 export const TAMPERMONKEY_SCRIPT_CODE = `// ==UserScript==
 // @name         华为CBG价格配置 - Offering自动填充助手
 // @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  自动选择“服务Offering配置表”、点击导入并静默注入最新Excel表格
+// @version      1.1
+// @description  自动选择“服务Offering配置表”、点击导入并静默注入最新Excel表格 (Vue3多阶段状态机容错版)
 // @author       Offering System
 // @match        https://cbg.huawei.com/*
 // @grant        GM_xmlhttpRequest
@@ -63,64 +63,135 @@ export const TAMPERMONKEY_SCRIPT_CODE = `// ==UserScript==
         sessionStorage.removeItem('offering_autofill_pending');
         showFloatingNotice('Offering 自动化助手：检测到自动填充请求，准备执行...', 'info');
 
-        let attempts = 0;
-        const maxAttempts = 40;
+        // 状态机: 1_WAIT_TAB -> 2_WAIT_IMPORT_BTN -> 3_WAIT_UPLOAD_INPUT -> 4_DONE
+        let currentStep = '1_WAIT_TAB';
+        let stepAttempts = 0;
+        const MAX_STEP_ATTEMPTS = 60; // 每步最多重试 30 秒 (500ms * 60)
 
         const timer = setInterval(async () => {
-            attempts++;
-            if (attempts > maxAttempts) {
-                clearInterval(timer);
-                showFloatingNotice('Offering 自动化助手：页面加载超时，请手动点击操作。', 'warn');
-                return;
+            stepAttempts++;
+
+            // ================= 步骤 1: 寻找并点击「服务Offering配置表」 =================
+            if (currentStep === '1_WAIT_TAB') {
+                showFloatingNotice('Offering 自动化助手：[步骤 1/3] 正在定位「服务Offering配置表」标签...', 'info');
+
+                // 检查是否已经在目标选项卡中（内容区已挂载）
+                const isAlreadyOnTab = document.querySelector('#serviceParameter') ||
+                                       Array.from(document.querySelectorAll('.is-active, .active, [aria-selected="true"]'))
+                                           .some(el => el.textContent && el.textContent.includes('服务Offering配置表'));
+
+                if (isAlreadyOnTab && document.querySelector('#serviceParameter')) {
+                    console.log('[Offering 自动化助手] 检测到已处于「服务Offering配置表」内容区，直接进入步骤 2');
+                    currentStep = '2_WAIT_IMPORT_BTN';
+                    stepAttempts = 0;
+                    return;
+                }
+
+                const tabXPath = '/html/body/div[3]/div/div/div[2]/div[1]/div/div/div/div/div/div[1]/div/div/div/div/section/div/div/ul/li[5]/span';
+                let tabElem = getElementByXPath(tabXPath) ||
+                              findDeepestElementByText('服务Offering配置表') ||
+                              findAnyElementByText('服务Offering配置表');
+
+                if (tabElem) {
+                    console.log('[Offering 自动化助手] 定位到「服务Offering配置表」元素:', tabElem);
+                    simulateFullClick(tabElem);
+
+                    // 兼容 Element Plus / AntD：如果父级是 li 或 tab 容器，同步点击
+                    const parentTab = tabElem.closest('li, [role="tab"], .el-tabs__item, .ant-tabs-tab');
+                    if (parentTab && parentTab !== tabElem) {
+                        simulateFullClick(parentTab);
+                    }
+
+                    showFloatingNotice('Offering 自动化助手：已点击「服务Offering配置表」，等待内容加载...', 'info');
+                    currentStep = '2_WAIT_IMPORT_BTN';
+                    stepAttempts = 0;
+                    return;
+                }
+
+                if (stepAttempts > MAX_STEP_ATTEMPTS) {
+                    console.warn('[Offering 自动化助手] 步骤 1 超时，尝试直接进入步骤 2');
+                    showFloatingNotice('Offering 自动化助手：若未自动切换，请手动点击「服务Offering配置表」...', 'warn');
+                    currentStep = '2_WAIT_IMPORT_BTN';
+                    stepAttempts = 0;
+                }
             }
 
-            // 1. 定位并点击“服务Offering配置表”标签
-            const tabXPath = '/html/body/div[3]/div/div/div[2]/div[1]/div/div/div/div/div/div[1]/div/div/div/div/section/div/div/ul/li[5]/span';
-            let tabElem = getElementByXPath(tabXPath) || findElementByText('span', '服务Offering配置表');
-            if (tabElem) {
-                tabElem.click();
-            }
+            // ================= 步骤 2: 寻找并点击「导入」按钮 =================
+            else if (currentStep === '2_WAIT_IMPORT_BTN') {
+                showFloatingNotice('Offering 自动化助手：[步骤 2/3] 正在寻找「导入」按钮...', 'info');
 
-            // 2. 定位并点击“导入按钮”
-            const importXPath = '//*[@id="serviceParameter"]/section/main/div/div/div/div[1]/div/div[6]/div[1]/div/div/div[1]/div[2]/div[4]/button/span/span/svg';
-            let importBtn = getElementByXPath(importXPath) || findButtonByText('导入');
-            if (importBtn) {
-                const buttonToClick = importBtn.closest('button') || importBtn;
-                buttonToClick.click();
-            }
+                const importXPath = '//*[@id="serviceParameter"]/section/main/div/div/div/div[1]/div/div[6]/div[1]/div/div/div[1]/div[2]/div[4]/button/span/span/svg';
+                let importElem = getElementByXPath(importXPath);
+                let importBtn = importElem ? (importElem.closest('button') || importElem) : null;
 
-            // 3. 定位“选择文件”上传区域/输入框
-            const uploadAreaXPath = '/html/body/div[3]/div/div/div[2]/div[1]/div/div/div/div/div/div[1]/div/div/div/div/section/main/div/div/div/div[1]/div/div[6]/div[1]/div/div/div[2]/div/div[2]/div/div[1]';
-            const uploadArea = getElementByXPath(uploadAreaXPath) || document.querySelector('.el-upload, .ant-upload, input[type="file"]');
-            
-            const fileInput = document.querySelector('input[type="file"]');
-
-            if (fileInput) {
-                clearInterval(timer);
-                showFloatingNotice('Offering 自动化助手：正在从工作台拉取最新 Excel 表格...', 'info');
-
-                const serverOrigin = urlParams.get('src') || localStorage.getItem('offering_server_origin') || window.location.origin;
-                const fileUrl = \`\${serverOrigin}/api/workbench/latest-export.xlsx?t=\${Date.now()}\`;
-
-                try {
-                    const blob = await fetchFileBlob(fileUrl);
-                    const file = new File([blob], 'offering_workbench_export.xlsx', {
-                        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                if (!importBtn) {
+                    // 全局/容器内备选查找：寻找包含“导入”文本的按钮
+                    const allButtons = Array.from(document.querySelectorAll('button, .el-button, [role="button"]'));
+                    importBtn = allButtons.find(b => {
+                        const txt = b.textContent ? b.textContent.trim() : '';
+                        return txt === '导入' || txt.includes('导入');
                     });
+                }
 
-                    // 使用 DataTransfer 将文件静默注入到 input[type="file"]
-                    const dataTransfer = new DataTransfer();
-                    dataTransfer.items.add(file);
-                    fileInput.files = dataTransfer.files;
+                if (importBtn) {
+                    console.log('[Offering 自动化助手] 定位到「导入」按钮:', importBtn);
+                    simulateFullClick(importBtn);
+                    showFloatingNotice('Offering 自动化助手：已点击「导入」，等待上传弹窗打开...', 'info');
+                    currentStep = '3_WAIT_UPLOAD_INPUT';
+                    stepAttempts = 0;
+                    return;
+                }
 
-                    // 触发 input 和 change 事件通知前端组件更新
-                    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-                    fileInput.dispatchEvent(new Event('input', { bubbles: true }));
+                if (stepAttempts > MAX_STEP_ATTEMPTS) {
+                    console.warn('[Offering 自动化助手] 步骤 2 超时');
+                    showFloatingNotice('Offering 自动化助手：未自动检测到导入按钮，请手动点击「导入」...', 'warn');
+                    currentStep = '3_WAIT_UPLOAD_INPUT';
+                    stepAttempts = 0;
+                }
+            }
 
-                    showFloatingNotice('Offering 自动化助手：已成功自动注入最新 Excel 文件！请核对并确认导入。', 'success');
-                } catch (err) {
-                    console.error('AutoFill failed:', err);
-                    showFloatingNotice('Offering 自动化助手：自动装填失败，请手动选择刚下载的 Excel 文件。', 'error');
+            // ================= 步骤 3: 寻找上传 input 并静默注入 Excel =================
+            else if (currentStep === '3_WAIT_UPLOAD_INPUT') {
+                showFloatingNotice('Offering 自动化助手：[步骤 3/3] 正在定位上传组件并注入文件...', 'info');
+
+                // 寻找上传组件中的 input[type="file"]
+                const fileInputs = Array.from(document.querySelectorAll('input[type="file"]'));
+                const fileInput = fileInputs[fileInputs.length - 1]; // 取当前最新的/最顶层的 input
+
+                if (fileInput) {
+                    clearInterval(timer);
+                    console.log('[Offering 自动化助手] 定位到 input[type="file"]:', fileInput);
+                    showFloatingNotice('Offering 自动化助手：正在从工作台拉取最新 Excel 表格...', 'info');
+
+                    const serverOrigin = urlParams.get('src') || localStorage.getItem('offering_server_origin') || window.location.origin;
+                    const fileUrl = \`\${serverOrigin}/api/workbench/latest-export.xlsx?t=\${Date.now()}\`;
+
+                    try {
+                        const blob = await fetchFileBlob(fileUrl);
+                        const file = new File([blob], 'offering_workbench_export.xlsx', {
+                            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                        });
+
+                        // 使用 DataTransfer 将文件静默注入到 input[type="file"]
+                        const dataTransfer = new DataTransfer();
+                        dataTransfer.items.add(file);
+                        fileInput.files = dataTransfer.files;
+
+                        // 触发 input 和 change 事件通知 Vue 组件响应
+                        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+                        fileInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+                        console.log('[Offering 自动化助手] Excel 文件注入成功!');
+                        showFloatingNotice('🎉 全部完成：已自动装填 Excel 表格！请核对并点击提交。', 'success');
+                    } catch (err) {
+                        console.error('[Offering 自动化助手] 注入文件失败:', err);
+                        showFloatingNotice('Offering 自动化助手：文件自动装填失败，请手动选择刚下载的 Excel 表格。', 'error');
+                    }
+                }
+
+                if (stepAttempts > MAX_STEP_ATTEMPTS) {
+                    clearInterval(timer);
+                    showFloatingNotice('Offering 自动化助手：未检测到上传输入框，请手动选择刚下载的 Excel 文件。', 'warn');
                 }
             }
         }, 500);
@@ -134,14 +205,44 @@ export const TAMPERMONKEY_SCRIPT_CODE = `// ==UserScript==
         }
     }
 
-    function findElementByText(tagName, text) {
-        const elems = Array.from(document.querySelectorAll(tagName));
-        return elems.find(el => el.textContent.trim().includes(text));
+    // 查找包含指定文本的最深叶子节点
+    function findDeepestElementByText(text) {
+        const all = Array.from(document.querySelectorAll('span, a, div, li, p'));
+        return all.find(el => {
+            if (!el.textContent || !el.textContent.includes(text)) return false;
+            return !Array.from(el.children).some(child => child.textContent && child.textContent.includes(text));
+        });
     }
 
-    function findButtonByText(text) {
-        const buttons = Array.from(document.querySelectorAll('button, [role="button"]'));
-        return buttons.find(b => b.textContent.trim().includes(text));
+    function findAnyElementByText(text) {
+        const elems = Array.from(document.querySelectorAll('span, [role="tab"], li'));
+        return elems.find(el => el.textContent && el.textContent.trim().includes(text));
+    }
+
+    // Vue 3 兼容的完整事件链模拟触发
+    function simulateFullClick(el) {
+        if (!el) return;
+        try {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch (e) {}
+
+        const eventNames = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+        for (const evtName of eventNames) {
+            try {
+                const evt = new MouseEvent(evtName, {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    detail: 1
+                });
+                el.dispatchEvent(evt);
+            } catch (e) {}
+        }
+        if (typeof el.click === 'function') {
+            try {
+                el.click();
+            } catch (e) {}
+        }
     }
 
     function fetchFileBlob(url) {

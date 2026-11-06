@@ -100,6 +100,23 @@ async function startServer() {
     }
   });
 
+  // Endpoint to download the Windows start_automation.bat launcher
+  const BAT_FILE_PATH = path.join(path.resolve(process.cwd(), 'scripts'), 'start_automation.bat');
+  app.get('/api/download-starter-bat', (_req, res) => {
+    try {
+      if (fs.existsSync(BAT_FILE_PATH)) {
+        res.setHeader('Content-Type', 'application/x-bat');
+        res.setHeader('Content-Disposition', 'attachment; filename="start_automation.bat"');
+        res.sendFile(BAT_FILE_PATH);
+      } else {
+        res.status(404).json({ success: false, error: '启动脚本不存在' });
+      }
+    } catch (err: any) {
+      console.error('Failed to download bat script:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   app.get('/api/data', (_req, res) => {
     try {
       const data = getAllData();

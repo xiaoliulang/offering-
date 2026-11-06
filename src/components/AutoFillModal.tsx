@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { OfferingRow } from '../types/offering';
 import { generateExcelBuffer } from '../utils/offeringParser';
 import {
@@ -7,7 +7,7 @@ import {
   ExternalLink,
   Copy,
   Check,
-  Code2,
+  Terminal,
   FileSpreadsheet,
   AlertCircle,
   HelpCircle,
@@ -16,6 +16,8 @@ import {
   Play,
   ShieldCheck,
   ChevronDown,
+  RefreshCw,
+  FolderOpen,
 } from 'lucide-react';
 
 interface AutoFillModalProps {
@@ -40,334 +42,231 @@ export const EXPORT_HEADERS = [
   { title: '*维修部件' },
 ];
 
-export const TAMPERMONKEY_SCRIPT_CODE = `// ==UserScript==
-// @name         华为CBG价格配置 - Offering全自动填充助手
-// @namespace    http://tampermonkey.net/
-// @version      2.0
-// @description  点击工作台自动化填充后，自动切换Tab、点击导入、选择文件并静默注入最新Excel表格（完全对应Playwright步骤1~4，步骤5暂停核对）
-// @author       Offering System
-// @match        https://cbg.huawei.com/*
-// @grant        GM_xmlhttpRequest
-// @grant        GM_notification
-// @grant        GM_setValue
-// @grant        GM_getValue
-// @connect      *
-// @run-at       document-end
-// ==/UserScript==
+export const PYTHON_PLAYWRIGHT_SCRIPT = `#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+华为 CBG Offering 自动填充助手 (Playwright 专版)
+通过 Edge 远程调试端口 (CDP 9222) 继承个人登录态，
+在工作台点击【自动化填充】后，全自动完成页面跳转、切换Tab、打开导入弹窗并静默注入生成的 Excel 文件。
 
-(function() {
-    'use strict';
+步骤 1: 点击“服务Offering配置表” Tab
+步骤 2: 点击“导入”按钮
+步骤 3: 点击弹框中的“选择文件”按钮
+步骤 4: 静默注入 Excel 配置文件
+步骤 5: 保持核对状态，由人工最终点击【保存】
+"""
 
-    // HUD 悬浮提示条
-    function showHUD(message, type = 'info', duration = 8000) {
-        let hud = document.getElementById('offering-autofill-hud');
-        if (!hud) {
-            hud = document.createElement('div');
-            hud.id = 'offering-autofill-hud';
-            hud.style.cssText = \`
-                position: fixed;
-                top: 24px;
-                right: 24px;
-                z-index: 999999;
-                max-width: 480px;
-                padding: 14px 18px;
-                border-radius: 12px;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
-                font-size: 13px;
-                font-weight: 500;
-                line-height: 1.5;
-                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
-                transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-                display: flex;
-                align-items: center;
-                gap: 12px;
-            \`;
-            document.body.appendChild(hud);
-        }
+import sys
+import os
+import time
+import subprocess
+import argparse
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import json
+from playwright.sync_api import sync_playwright
 
-        const colors = {
-            info: { bg: '#1e1b4b', text: '#e0e7ff', border: '#4338ca', icon: '🤖' },
-            success: { bg: '#064e3b', text: '#ecfdf5', border: '#059669', icon: '🎉' },
-            warn: { bg: '#78350f', text: '#fef3c7', border: '#d97706', icon: '⚠️' },
-            error: { bg: '#7f1d1d', text: '#fee2e2', border: '#dc2626', icon: '❌' }
-        };
+DEFAULT_USER_DATA_DIR = r"C:\\Users\\y00656362\\AppData\\Local\\Microsoft\\Edge\\User Data"
+TARGET_URL = "https://cbg.huawei.com/#/group/finance/service_iprice_configuration"
+DEFAULT_TEMP_EXCEL = os.path.abspath("latest_offering_workbench.xlsx")
+PORT = 19222
 
-        const theme = colors[type] || colors.info;
-        hud.style.backgroundColor = theme.bg;
-        hud.style.color = theme.text;
-        hud.style.border = \`1.5px solid \${theme.border}\`;
-        hud.innerHTML = \`<span style="font-size:18px;">\${theme.icon}</span> <span>\${message}</span>\`;
-        hud.style.opacity = '1';
-        hud.style.transform = 'translateY(0)';
 
-        if (duration > 0) {
-            setTimeout(() => {
-                if (hud) hud.style.opacity = '0';
-            }, duration);
-        }
-    }
+def ensure_edge_debug_browser(user_data_dir=None):
+    """检测并强制拉起带 9222 调试端口的 Microsoft Edge 浏览器，继承登录态"""
+    print("\\n" + "=" * 55)
+    print("🧹 正在检查并清理后台 Edge 进程...")
+    os.system("taskkill /f /im msedge.exe >nul 2>&1")
+    time.sleep(1.5)
 
-    // Vue 3 兼容的高仿真事件链点击
-    function simulateFullClick(el) {
-        if (!el) return;
-        try {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } catch (e) {}
+    edge_path = r"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
+    if not os.path.exists(edge_path):
+        edge_path = r"C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"
 
-        ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evtName => {
-            try {
-                const evt = new MouseEvent(evtName, {
-                    bubbles: true,
-                    cancelable: true,
-                    view: window,
-                    detail: 1
-                });
-                el.dispatchEvent(evt);
-            } catch (e) {}
-        });
+    profile_dir = user_data_dir or DEFAULT_USER_DATA_DIR
+    if not os.path.exists(profile_dir):
+        fallback_profile = os.path.expanduser(r"~\\AppData\\Local\\Microsoft\\Edge\\User Data")
+        if os.path.exists(fallback_profile):
+            profile_dir = fallback_profile
 
-        if (typeof el.click === 'function') {
-            try { el.click(); } catch (e) {}
-        }
-    }
+    print(f"🚀 正在拉起带 9222 调试端口的 Edge...")
+    print(f"📂 使用用户配置文件: {profile_dir}")
+    print(f"🔗 目标页面: {TARGET_URL}")
 
-    // 请求文件 Blob (支持 GM_xmlhttpRequest 绕过跨域限制)
-    function fetchFileBlob(url) {
-        return new Promise((resolve, reject) => {
-            if (typeof GM_xmlhttpRequest === 'function') {
-                GM_xmlhttpRequest({
-                    method: 'GET',
-                    url: url,
-                    responseType: 'blob',
-                    onload: (res) => {
-                        if (res.status >= 200 && res.status < 300) {
-                            resolve(res.response);
-                        } else {
-                            reject(new Error('HTTP status ' + res.status));
-                        }
-                    },
-                    onerror: (err) => reject(err)
-                });
-            } else {
-                fetch(url).then(r => {
-                    if (!r.ok) throw new Error('HTTP ' + r.status);
-                    return r.blob();
-                }).then(resolve).catch(reject);
-            }
-        });
-    }
+    cmd = [
+        edge_path,
+        "--remote-debugging-port=9222",
+        f"--user-data-dir={profile_dir}",
+        TARGET_URL
+    ]
+    subprocess.Popen(cmd)
+    print("⏳ 等待 3.5 秒，确保 Edge 调试服务完全就绪...")
+    time.sleep(3.5)
 
-    // 核心主入口
-    function checkAndRun() {
-        const hash = window.location.hash || '';
-        const search = window.location.search || '';
-        const urlParams = new URLSearchParams(search);
-        const hashParams = hash.includes('?') ? new URLSearchParams(hash.split('?')[1]) : new URLSearchParams();
 
-        const isAutoFill = urlParams.get('offering_autofill') === '1' ||
-                           hashParams.get('offering_autofill') === '1' ||
-                           sessionStorage.getItem('offering_autofill_pending') === '1' ||
-                           localStorage.getItem('offering_autofill_pending') === '1';
+def run_playwright_workflow(excel_path):
+    """
+    执行步骤 1 ~ 4 自动化流程：
+    步骤 1: 点击“服务Offering配置表” Tab
+    步骤 2: 点击“导入”按钮
+    步骤 3: 点击弹框中的“选择文件”按钮
+    步骤 4: 静默注入 Excel 配置文件
+    (步骤 5 点击保存按钮暂未自动执行，请核对后手动点击保存)
+    """
+    print("\\n" + "=" * 55)
+    print(f"🚀 开始执行自动化填充流程，目标文件: {excel_path}")
 
-        if (!isAutoFill) return;
+    # 1. 确保 Edge 调试浏览器已拉起
+    ensure_edge_debug_browser()
 
-        // 记入会话状态
-        sessionStorage.setItem('offering_autofill_pending', '1');
-        const serverOrigin = urlParams.get('src') || hashParams.get('src') ||
-                             sessionStorage.getItem('offering_server_src') ||
-                             localStorage.getItem('offering_server_src') ||
-                             'https://ais-dev-5hrgtnkandgiguunxzlb32-129552824885.asia-southeast1.run.app';
-        sessionStorage.setItem('offering_server_src', serverOrigin);
+    with sync_playwright() as p:
+        try:
+            print("🔌 正在连接本地 Edge 9222 调试端口...")
+            browser = p.chromium.connect_over_cdp("http://localhost:9222")
+            context = browser.contexts[0]
+            
+            page = None
+            for p_item in context.pages:
+                if "service_iprice_configuration" in p_item.url:
+                    page = p_item
+                    break
+            
+            if not page:
+                page = context.pages[0] if context.pages else context.new_page()
+                page.goto(TARGET_URL, wait_until="networkidle")
 
-        // 如果在主页面或者路由不对，自动引导至价格配置页面
-        if (!window.location.hash.includes('service_iprice_configuration')) {
-            console.log('[Offering 自动化助手] 检测到自动填充请求，正在自动跳转到服务价格配置页面...');
-            showHUD('Offering 自动化助手：检测到请求，正在进入服务价格配置页面...', 'info');
-            setTimeout(() => {
-                window.location.hash = '#/group/finance/service_iprice_configuration';
-            }, 800);
-            return;
-        }
+            # 步骤 1：点击“服务Offering配置表” Tab
+            print("⏳ 步骤 1/4: 正在定位并点击“服务Offering配置表”...")
+            tab_elem = page.get_by_text("服务Offering配置表", exact=True)
+            tab_elem.wait_for(state="visible", timeout=15000)
+            tab_elem.click()
+            print("✅ 步骤 1 完成：已成功切换至“服务Offering配置表”")
 
-        showHUD('Offering 自动化助手：已进入配置页面，开始自动执行步骤 1~4...', 'info');
+            # 步骤 2：点击“导入”按钮
+            print("⏳ 步骤 2/4: 正在等待表格区域渲染，并精准点击“导入”按钮...")
+            import_xpath = '//*[@id="serviceParameter"]/section/main/div/div/div/div[1]/div/div[6]/div[1]/div/div/div[1]/div[2]/div[4]/button'
+            import_btn = page.locator(f"xpath={import_xpath}")
+            import_btn.wait_for(state="visible", timeout=15000)
+            import_btn.click()
+            print("✅ 步骤 2 完成：已成功点击“导入”按钮")
 
-        // 状态机依次执行步骤 1 -> 2 -> 3 -> 4
-        let currentStep = '1_WAIT_TAB';
-        let stepAttempts = 0;
-        const MAX_STEP_ATTEMPTS = 50; // 每步最多重试 25 秒 (500ms * 50)
+            # 步骤 3：点击弹框中的“选择文件”按钮
+            print("⏳ 步骤 3/4: 正在等待文件上传弹框出现，并点击“选择文件”...")
+            upload_btn = page.locator("button.uploadBtn")
+            upload_btn.wait_for(state="visible", timeout=10000)
+            upload_btn.click()
+            print("✅ 步骤 3 完成：已点击“选择文件”按钮")
 
-        const timer = setInterval(async () => {
-            stepAttempts++;
+            # 步骤 4：静默注入 Excel 配置文件
+            print(f"⏳ 步骤 4/4: 正在向文件输入框注入 Excel 表格: {excel_path}")
+            page.set_input_files("input[type='file']", excel_path)
+            print("✅ 步骤 4 完成：Excel 文件已注入！")
 
-            // ================= 步骤 1: 点击“服务Offering配置表” Tab =================
-            if (currentStep === '1_WAIT_TAB') {
-                showHUD('[步骤 1/4] 正在定位并点击「服务Offering配置表」...', 'info');
+            print("\\n" + "*" * 55)
+            print("🎉 恭喜！前 4 步已全部全自动执行完毕！")
+            print("👉 当前为验证阶段，请在打开的 Edge 弹窗中核对数据，并手动点击【保存】按钮！")
+            print("*" * 55 + "\\n")
 
-                // 检查内容区是否已呈现
-                if (document.querySelector('#serviceParameter')) {
-                    console.log('[Offering 自动化助手] 已在「服务Offering配置表」内容区，直接进入步骤 2');
-                    currentStep = '2_WAIT_IMPORT_BTN';
-                    stepAttempts = 0;
-                    return;
-                }
+            page.wait_for_timeout(5000)
+            return True
 
-                // 精准文本定位 (对应 Playwright get_by_text)
-                const allElems = Array.from(document.querySelectorAll('span, li, [role="tab"], div, a'));
-                let tabElem = allElems.find(el => el.textContent && el.textContent.trim() === '服务Offering配置表');
+        except Exception as e:
+            print(f"❌ 自动化执行异常: {e}")
+            raise e
 
-                if (!tabElem) {
-                    const tabXPath = '/html/body/div[3]/div/div/div[2]/div[1]/div/div/div/div/div/div[1]/div/div/div/div/section/div/div/ul/li[5]/span';
-                    try {
-                        tabElem = document.evaluate(tabXPath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                    } catch (e) {}
-                }
 
-                if (tabElem) {
-                    console.log('[Offering 自动化助手] 定位到「服务Offering配置表」:', tabElem);
-                    simulateFullClick(tabElem);
-                    const parentLi = tabElem.closest('li, [role="tab"]');
-                    if (parentLi && parentLi !== tabElem) simulateFullClick(parentLi);
+class AutoFillHTTPHandler(BaseHTTPRequestHandler):
+    """本地 HTTP 桥接服务处理器，供网页端一键调用"""
+    
+    def log_message(self, format, *args):
+        print(f"[{time.strftime('%H:%M:%S')}] {args[0]} {args[1]} -> {args[2]}")
 
-                    showHUD('✅ 步骤 1 完成：已点击「服务Offering配置表」，等待表格加载...', 'info');
-                    currentStep = '2_WAIT_IMPORT_BTN';
-                    stepAttempts = 0;
-                    return;
-                }
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Accept')
+        self.end_headers()
 
-                if (stepAttempts > MAX_STEP_ATTEMPTS) {
-                    console.warn('[Offering 自动化助手] 步骤 1 等待超时，尝试进入步骤 2');
-                    currentStep = '2_WAIT_IMPORT_BTN';
-                    stepAttempts = 0;
-                }
-            }
+    def do_GET(self):
+        if self.path.startswith('/status'):
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            resp = json.dumps({"status": "running", "target": TARGET_URL, "version": "2.0"})
+            self.wfile.write(resp.encode('utf-8'))
+        else:
+            self.send_response(404)
+            self.end_headers()
 
-            // ================= 步骤 2: 点击“导入”按钮 =================
-            else if (currentStep === '2_WAIT_IMPORT_BTN') {
-                showHUD('[步骤 2/4] 正在定位并点击「导入」按钮...', 'info');
+    def do_POST(self):
+        if self.path.startswith('/autofill'):
+            try:
+                content_len = int(self.headers.get('Content-Length', 0))
+                excel_bytes = self.rfile.read(content_len)
 
-                // 优先使用 Playwright 验证的 XPath
-                const importXPath = '//*[@id="serviceParameter"]/section/main/div/div/div/div[1]/div/div[6]/div[1]/div/div/div[1]/div[2]/div[4]/button';
-                let importBtn = null;
-                try {
-                    const elem = document.evaluate(importXPath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                    if (elem) importBtn = elem.closest('button') || elem;
-                } catch (e) {}
+                with open(DEFAULT_TEMP_EXCEL, 'wb') as f:
+                    f.write(excel_bytes)
+                print(f"\\n📥 收到网页端推来的 Excel 数据，已暂存 ({len(excel_bytes)} 字节) -> {DEFAULT_TEMP_EXCEL}")
 
-                if (!importBtn) {
-                    const buttons = Array.from(document.querySelectorAll('#serviceParameter button, button'));
-                    importBtn = buttons.find(b => {
-                        const txt = b.textContent ? b.textContent.trim() : '';
-                        return txt === '导入' || txt.includes('导入');
-                    });
-                }
+                run_playwright_workflow(DEFAULT_TEMP_EXCEL)
 
-                if (importBtn) {
-                    console.log('[Offering 自动化助手] 定位到「导入」按钮:', importBtn);
-                    simulateFullClick(importBtn);
-                    showHUD('✅ 步骤 2 完成：已点击「导入」，等待上传弹窗打开...', 'info');
-                    currentStep = '3_WAIT_UPLOAD_BTN';
-                    stepAttempts = 0;
-                    return;
-                }
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                resp = json.dumps({
+                    "success": True,
+                    "message": "步骤 1~4 已全部自动执行成功！请在页面中核对并点击【保存】。"
+                }, ensure_ascii=False)
+                self.wfile.write(resp.encode('utf-8'))
 
-                if (stepAttempts > MAX_STEP_ATTEMPTS) {
-                    showHUD('未自动检测到导入按钮，请手动点击「导入」', 'warn');
-                    currentStep = '3_WAIT_UPLOAD_BTN';
-                    stepAttempts = 0;
-                }
-            }
+            except Exception as err:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                resp = json.dumps({"success": False, "error": str(err)}, ensure_ascii=False)
+                self.wfile.write(resp.encode('utf-8'))
+        else:
+            self.send_response(404)
+            self.end_headers()
 
-            // ================= 步骤 3: 点击“选择文件”按钮 =================
-            else if (currentStep === '3_WAIT_UPLOAD_BTN') {
-                showHUD('[步骤 3/4] 正在等待文件弹窗并点击「选择文件」...', 'info');
 
-                // 优先匹配 button.uploadBtn
-                let uploadBtn = document.querySelector('button.uploadBtn');
+def start_server():
+    server_address = ('127.0.0.1', PORT)
+    httpd = HTTPServer(server_address, AutoFillHTTPHandler)
+    print("=" * 60)
+    print("🚀 华为 Offering 自动化 Playwright 本地引擎已启动！")
+    print(f"👉 本地服务地址: http://127.0.0.1:{PORT}")
+    print("💡 使用方式：保持此窗口运行，在业务工作台点击【自动化填充】按钮，")
+    print("   Edge 浏览器将全自动启动、切换标签、打开弹窗并装填文件！")
+    print("=" * 60)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\\n🛑 服务已停止。")
+        httpd.server_close()
 
-                if (!uploadBtn) {
-                    const dialogButtons = Array.from(document.querySelectorAll('.el-dialog button, .ant-modal button, [role="dialog"] button, button'));
-                    uploadBtn = dialogButtons.find(b => {
-                        const txt = b.textContent ? b.textContent.trim() : '';
-                        return txt.includes('选择文件') || txt.includes('点击上传') || b.classList.contains('uploadBtn');
-                    });
-                }
 
-                if (uploadBtn) {
-                    console.log('[Offering 自动化助手] 定位到「选择文件」按钮:', uploadBtn);
-                    simulateFullClick(uploadBtn);
-                    showHUD('✅ 步骤 3 完成：已点击「选择文件」，正在注入 Excel 表格...', 'info');
-                    currentStep = '4_INJECT_FILE';
-                    stepAttempts = 0;
-                    return;
-                }
+def main():
+    parser = argparse.ArgumentParser(description="华为 CBG Offering 自动填充助手 (Playwright 专版)")
+    parser.add_argument("--file", help="直接使用本地 Excel 文件运行一次（不启动 HTTP 监听）")
+    parser.add_argument("--profile", default=DEFAULT_USER_DATA_DIR, help="Edge 用户数据目录路径")
+    args = parser.parse_args()
 
-                // 若 input[type="file"] 已就绪，直接进入注入
-                if (document.querySelector('input[type="file"]')) {
-                    currentStep = '4_INJECT_FILE';
-                    stepAttempts = 0;
-                    return;
-                }
+    if args.file:
+        target_file = os.path.abspath(args.file)
+        if not os.path.exists(target_file):
+            print(f"❌ 找不到指定文件: {target_file}")
+            sys.exit(1)
+        run_playwright_workflow(target_file)
+    else:
+        start_server()
 
-                if (stepAttempts > MAX_STEP_ATTEMPTS) {
-                    currentStep = '4_INJECT_FILE';
-                    stepAttempts = 0;
-                }
-            }
 
-            // ================= 步骤 4: 静默注入 Excel 配置文件 =================
-            else if (currentStep === '4_INJECT_FILE') {
-                showHUD('[步骤 4/4] 正在向系统注入 Excel 配置文件...', 'info');
-
-                const fileInputs = Array.from(document.querySelectorAll('input[type="file"]'));
-                const fileInput = fileInputs[fileInputs.length - 1];
-
-                if (fileInput) {
-                    clearInterval(timer);
-                    console.log('[Offering 自动化助手] 定位到 input[type="file"]:', fileInput);
-
-                    const fileUrl = \`\${serverOrigin}/api/workbench/latest-export.xlsx?t=\${Date.now()}\`;
-
-                    try {
-                        const blob = await fetchFileBlob(fileUrl);
-                        const file = new File([blob], '服务Offering配置表_' + new Date().toISOString().slice(0, 10) + '.xlsx', {
-                            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                        });
-
-                        const dataTransfer = new DataTransfer();
-                        dataTransfer.items.add(file);
-                        fileInput.files = dataTransfer.files;
-
-                        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-                        fileInput.dispatchEvent(new Event('input', { bubbles: true }));
-
-                        console.log('[Offering 自动化助手] Excel 表格注入成功!');
-                        sessionStorage.removeItem('offering_autofill_pending');
-                        localStorage.removeItem('offering_autofill_pending');
-
-                        // 步骤 5 暂停：核对确认
-                        showHUD('🎉 恭喜！步骤 1~4 已全部自动执行成功！Excel 已注入系统。请在当前弹窗中核对数据，确认无误后请手动点击【保存】。', 'success', 25000);
-                    } catch (err) {
-                        console.error('[Offering 自动化助手] 拉取/注入文件失败:', err);
-                        showHUD('⚠️ 自动装填文件失败，请手动在弹窗中选择刚下载的 Excel 备份文件。', 'error', 15000);
-                    }
-                } else if (stepAttempts > MAX_STEP_ATTEMPTS) {
-                    clearInterval(timer);
-                    showHUD('⚠️ 未检测到文件输入框，请手动选择刚下载的 Excel 文件。', 'warn', 15000);
-                }
-            }
-        }, 500);
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', checkAndRun);
-    } else {
-        checkAndRun();
-    }
-
-    window.addEventListener('hashchange', () => {
-        setTimeout(checkAndRun, 600);
-    });
-})();
+if __name__ == '__main__':
+    main()
 `;
 
 export const AutoFillModal: React.FC<AutoFillModalProps> = ({
@@ -379,13 +278,106 @@ export const AutoFillModal: React.FC<AutoFillModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showScriptDrawer, setShowScriptDrawer] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isLocalServiceReady, setIsLocalServiceReady] = useState<boolean | null>(null);
+  const [isCheckingService, setIsCheckingService] = useState(false);
+
+  // 检测本地 Playwright 引擎服务健康状态
+  const checkServiceHealth = async () => {
+    setIsCheckingService(true);
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 1200);
+      const res = await fetch('http://127.0.0.1:19222/status', {
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (res.ok) {
+        setIsLocalServiceReady(true);
+      } else {
+        setIsLocalServiceReady(false);
+      }
+    } catch {
+      setIsLocalServiceReady(false);
+    } finally {
+      setIsCheckingService(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      checkServiceHealth();
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const handleCopyScript = () => {
-    navigator.clipboard.writeText(TAMPERMONKEY_SCRIPT_CODE);
+    navigator.clipboard.writeText(PYTHON_PLAYWRIGHT_SCRIPT);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleDownloadPy = () => {
+    const blob = new Blob([PYTHON_PLAYWRIGHT_SCRIPT], { type: 'text/x-python;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cbg_bridge.py';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadBat = () => {
+    const batContent = `@echo off
+chcp 65001 >nul
+title 华为 CBG Offering 自动填充引擎
+color 0A
+
+echo ======================================================================
+echo              华为 CBG Offering 自动化填充本地引擎
+echo ======================================================================
+echo.
+echo [1/3] 正在检查 Python 环境与依赖...
+python --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [错误] 未检测到 Python，请先安装 Python 3.8+ 并勾选 "Add to PATH"。
+    pause
+    exit /b 1
+)
+
+python -c "import playwright" >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [提示] 正在安装 Playwright 依赖库，请稍候...
+    pip install playwright -i https://pypi.tuna.tsinghua.edu.cn/simple
+    playwright install chromium
+)
+
+echo [2/3] 依赖就绪，正在启动本地 HTTP 桥接监听服务 (端口 19222)...
+echo.
+echo ======================================================================
+echo  服务已成功运行！请保持本黑框窗口打开（可最小化）。
+echo  在浏览器工作台中点击【自动化填充】按钮，系统将自动拉起 Edge 完成注入！
+echo ======================================================================
+echo.
+
+python "%~dp0cbg_bridge.py"
+if %errorlevel% neq 0 (
+    echo.
+    echo 服务异常退出，按任意键关闭。
+    pause
+)
+`;
+    const blob = new Blob([batContent], { type: 'application/x-bat;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'start_automation.bat';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const handleExecuteAutoFill = async () => {
@@ -397,7 +389,7 @@ export const AutoFillModal: React.FC<AutoFillModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      // 1. 准备标准 12 列明细数据
+      // 1. 准备标准 12 列数据
       const rows = tableData.map((row) => [
         row.lv3 || '',
         row.lv4 || '',
@@ -416,29 +408,7 @@ export const AutoFillModal: React.FC<AutoFillModalProps> = ({
       // 2. 生成 Excel 二进制 Buffer
       const buffer = await generateExcelBuffer(EXPORT_HEADERS, rows, '服务Offering配置表');
 
-      // 3. 将 Buffer 转为 Base64，同步上传至服务器，供跳转后自动拉取注入
-      let binary = '';
-      const bytes = new Uint8Array(buffer);
-      const len = bytes.byteLength;
-      for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const base64 = window.btoa(binary);
-
-      try {
-        await fetch('/api/workbench/latest-export', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            base64,
-            filename: `服务Offering配置表_${new Date().toISOString().slice(0, 10)}.xlsx`,
-          }),
-        });
-      } catch (uploadErr) {
-        console.warn('Failed to upload latest export to server:', uploadErr);
-      }
-
-      // 4. 触发浏览器本地自动下载一份 Excel 表格备份
+      // 3. 在浏览器本地自动保存一份备份 Excel 表格
       const blob = new Blob([buffer as any], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
@@ -451,28 +421,34 @@ export const AutoFillModal: React.FC<AutoFillModalProps> = ({
       document.body.removeChild(a);
       URL.revokeObjectURL(downloadUrl);
 
-      // 5. 存储标记与跨域源地址
-      sessionStorage.setItem('offering_autofill_pending', '1');
-      localStorage.setItem('offering_autofill_pending', '1');
-      localStorage.setItem('offering_server_src', window.location.origin);
+      // 4. 将生成的 Excel 推送到本地 Playwright 引擎服务执行
+      try {
+        const localBridgeRes = await fetch('http://127.0.0.1:19222/autofill', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/octet-stream' },
+          body: blob,
+        });
 
-      // 6. 异步尝试触发本地 Python 服务（若开启则双重保障，若未开也不会报错阻断）
-      fetch('http://127.0.0.1:19222/autofill', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body: blob,
-      }).catch(() => {
-        // 静默忽略本地 Python 未开启错误，因为主要采用浏览器直接跳转模式
-      });
-
-      // 7. 直接在浏览器中自动跳转到目标华为页面！
-      const targetUrl = `https://cbg.huawei.com/#/group/finance/service_iprice_configuration?offering_autofill=1&src=${encodeURIComponent(
-        window.location.origin
-      )}`;
-      window.open(targetUrl, '_blank');
-
-      onTriggerToast('🚀 已自动跳转到华为价格配置页面，自动化脚本正在执行步骤 1~4...');
-      onClose();
+        if (localBridgeRes.ok) {
+          setIsLocalServiceReady(true);
+          onTriggerToast('🎉 步骤 1~4 已全部自动执行完成！已在 Edge 中拉起并装填数据，请核对后手动点击【保存】。');
+          onClose();
+          return;
+        } else {
+          const errJson = await localBridgeRes.json().catch(() => ({}));
+          throw new Error(errJson.error || `HTTP ${localBridgeRes.status}`);
+        }
+      } catch (bridgeErr: any) {
+        setIsLocalServiceReady(false);
+        console.warn('Local bridge failed:', bridgeErr);
+        alert(
+          '未检测到本地自动化引擎服务（http://127.0.0.1:19222）。\n\n' +
+          '【启动方法】：\n' +
+          '1. 请点击弹窗上方的【一键下载启动脚本 (.bat)】；\n' +
+          '2. 将 start_automation.bat 与 cbg_bridge.py 放在同一文件夹下，双击运行即可！\n' +
+          '（已为您自动在电脑下载了最新的 Excel 备份文件）'
+        );
+      }
     } catch (err: any) {
       console.error('Failed to trigger auto fill:', err);
       alert(`处理失败: ${err.message || '未知错误'}`);
@@ -496,9 +472,22 @@ export const AutoFillModal: React.FC<AutoFillModalProps> = ({
                 <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
                   {tableData.length} 条待导出数据
                 </span>
+
+                {/* Local Engine Status Badge */}
+                {isLocalServiceReady === true ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>本地自动化引擎已就绪</span>
+                  </span>
+                ) : isLocalServiceReady === false ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                    <span>本地自动化引擎待启动</span>
+                  </span>
+                ) : null}
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                预览 12 项标准导出字段数据，点击右下角“自动化填充”直接跳转到华为系统自动执行
+                预览 12 项标准导出字段数据，确认后点击右下角“自动化填充”自动注入华为配置系统
               </p>
             </div>
           </div>
@@ -516,55 +505,83 @@ export const AutoFillModal: React.FC<AutoFillModalProps> = ({
             <div className="flex items-start gap-2.5">
               <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
               <div className="text-xs text-indigo-950 leading-relaxed">
-                <span className="font-semibold text-indigo-900">自动化执行流程：</span>
-                点击右下角“自动化填充”，系统将自动生成最新 Excel 并直接跳转至华为价格配置页面，自动执行【步骤 1: 切换Tab】➜【步骤 2: 点击导入】➜【步骤 3: 选择文件】➜【步骤 4: 注入Excel】。
+                <span className="font-semibold text-indigo-900">自动化执行流程（完全按您的定制脚本执行）：</span>
+                点击右下角“自动化填充”，系统自动将生成的 Excel 传入本地自动化引擎，在 Edge 中完成【步骤 1: 切换Tab】➜【步骤 2: 点击导入】➜【步骤 3: 选择文件】➜【步骤 4: 注入Excel】。
                 <span className="text-purple-700 font-medium ml-1">步骤 5 保存按钮保持人工核对，核对无误后手动保存。</span>
               </div>
             </div>
-            <button
-              onClick={() => setShowScriptDrawer((prev) => !prev)}
-              className="shrink-0 px-3 py-1.5 bg-white hover:bg-indigo-50 active:bg-indigo-100 border border-indigo-200 text-indigo-700 font-semibold rounded-lg text-xs shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Code2 className="w-3.5 h-3.5 text-indigo-600" />
-              <span>{showScriptDrawer ? '收起配套脚本' : '配套油猴脚本 (一键复制/更新)'}</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showScriptDrawer ? 'rotate-180' : ''}`} />
-            </button>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={checkServiceHealth}
+                disabled={isCheckingService}
+                title="检查本地引擎状态"
+                className="p-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-lg text-xs cursor-pointer transition-colors"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isCheckingService ? 'animate-spin text-indigo-600' : ''}`} />
+              </button>
+
+              <button
+                onClick={() => setShowScriptDrawer((prev) => !prev)}
+                className="px-3 py-1.5 bg-white hover:bg-indigo-50 active:bg-indigo-100 border border-indigo-200 text-indigo-700 font-semibold rounded-lg text-xs shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Terminal className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{showScriptDrawer ? '收起本地引擎工具' : '本地引擎一键启动包与代码'}</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showScriptDrawer ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
           </div>
 
-          {/* Tampermonkey Script Drawer */}
+          {/* Engine Setup Drawer */}
           {showScriptDrawer && (
             <div className="bg-slate-900 text-slate-100 rounded-xl p-4 text-xs space-y-3 border border-slate-700 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
                 <div className="font-semibold text-slate-200 flex items-center gap-1.5">
-                  <Code2 className="w-4 h-4 text-purple-400" />
-                  <span>配套油猴自动化脚本 (针对 Vue3 SPA 精准优化，包含步骤 1~4 全自动逻辑)</span>
+                  <Terminal className="w-4 h-4 text-purple-400" />
+                  <span>本地自动化引擎: cbg_bridge.py (Playwright + Edge 9222 端口)</span>
                 </div>
-                <button
-                  onClick={handleCopyScript}
-                  className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                >
-                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copied ? '已复制代码' : '一键复制脚本'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleDownloadBat}
+                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>下载一键启动批处理 (.bat)</span>
+                  </button>
+                  <button
+                    onClick={handleDownloadPy}
+                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>下载 cbg_bridge.py</span>
+                  </button>
+                  <button
+                    onClick={handleCopyScript}
+                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copied ? '已复制代码' : '复制 Python 代码'}</span>
+                  </button>
+                </div>
               </div>
 
               <div className="text-[11px] text-slate-400 leading-relaxed space-y-1">
                 <div>
-                  <strong>💡 安装/更新说明：</strong>
+                  <strong>💡 极简启动方式（仅需一次双击）：</strong>
                 </div>
                 <div>
-                  1. 在浏览器右上角油猴图标中，选择「添加新脚本」或编辑已有脚本；
+                  1. 点击上方绿色按钮下载 <code className="bg-slate-800 text-emerald-300 px-1 py-0.5 rounded font-mono">start_automation.bat</code> 和蓝色按钮下载 <code className="bg-slate-800 text-indigo-300 px-1 py-0.5 rounded font-mono">cbg_bridge.py</code>，放在电脑任意同一文件夹下；
                 </div>
                 <div>
-                  2. 点击上方【一键复制脚本】，将代码完整粘贴并保存（Ctrl + S）。
+                  2. 双击运行 <code className="bg-slate-800 text-emerald-300 px-1 py-0.5 rounded font-mono">start_automation.bat</code>（会自动检测环境并启动本地引擎）；
                 </div>
                 <div>
-                  3. 保存后回到本页面，每次点击【自动化填充】都将直接跳转并开始全自动执行！
+                  3. 启动后保持小黑框窗口运行，回到本页面点击【自动化填充】，即全自动拉起 Edge 完成前 4 步！
                 </div>
               </div>
 
               <div className="bg-slate-950 p-3 rounded-lg font-mono text-[11px] text-emerald-400 max-h-36 overflow-y-auto border border-slate-800">
-                <pre className="whitespace-pre-wrap">{TAMPERMONKEY_SCRIPT_CODE}</pre>
+                <pre className="whitespace-pre-wrap">{PYTHON_PLAYWRIGHT_SCRIPT}</pre>
               </div>
             </div>
           )}
@@ -645,7 +662,7 @@ export const AutoFillModal: React.FC<AutoFillModalProps> = ({
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
           <div className="text-xs text-slate-500 flex items-center gap-1.5">
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            <span>目标页面：https://cbg.huawei.com/#/group/finance/service_iprice_configuration</span>
+            <span>目标系统：华为 CBG 价格配置平台 (http://127.0.0.1:19222 本地引擎)</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -667,8 +684,8 @@ export const AutoFillModal: React.FC<AutoFillModalProps> = ({
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>{isSubmitting ? '正在跳转并执行...' : '自动化填充'}</span>
-              <ExternalLink className="w-3.5 h-3.5 opacity-90" />
+              <span>{isSubmitting ? '正在全自动执行中...' : '自动化填充'}</span>
+              <Play className="w-3 h-3 opacity-90 fill-current" />
             </button>
           </div>
         </div>

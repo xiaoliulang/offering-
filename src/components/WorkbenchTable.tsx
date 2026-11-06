@@ -537,7 +537,13 @@ export const WorkbenchTable: React.FC<WorkbenchTableProps> = ({
 
                     {/* Count */}
                     <td className="p-2.5 text-center font-mono font-semibold text-slate-800">
-                      {row.count || '-'}
+                      {row.count === '0' ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          不限次数
+                        </span>
+                      ) : (
+                        row.count || '-'
+                      )}
                     </td>
 
                     {/* Target */}

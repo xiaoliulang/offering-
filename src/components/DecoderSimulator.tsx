@@ -160,8 +160,10 @@ export const DecoderSimulator: React.FC<DecoderSimulatorProps> = ({
                 </div>
 
                 {/* Count */}
-                <div className="bg-amber-950/80 border border-amber-500/40 rounded p-2.5 text-center min-w-[65px]">
-                  <div className="text-amber-300 font-bold text-sm">{parsed.count || '--'}</div>
+                <div className="bg-amber-950/80 border border-amber-500/40 rounded p-2.5 text-center min-w-[70px]">
+                  <div className="text-amber-300 font-bold text-sm">
+                    {parsed.count === '0' ? '0 (不限)' : (parsed.count || '--')}
+                  </div>
                   <div className="text-[10px] text-amber-400/80 mt-1">次数 (次)</div>
                   <div className="text-[9px] text-slate-400 mt-0.5">slice(-4, -3)</div>
                 </div>
@@ -223,7 +225,9 @@ export const DecoderSimulator: React.FC<DecoderSimulatorProps> = ({
             <div className="py-2.5 flex items-center justify-between">
               <span className="text-slate-500">保障服务次数 (Count):</span>
               <span className="font-mono font-semibold text-amber-700">
-                {resolved.count ? `${resolved.count} 次` : '未识别'}
+                {resolved.count === '0'
+                  ? '不限次数 (0)'
+                  : (resolved.count ? `${resolved.count} 次` : '未识别')}
               </span>
             </div>
             <div className="py-2.5 flex items-center justify-between">

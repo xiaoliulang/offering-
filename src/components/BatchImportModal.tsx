@@ -168,7 +168,7 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
                         <td className="p-2 text-slate-500">{r.hardwareLV3 || '-'}</td>
                         <td className="p-2 font-mono text-slate-500">{r.hardwareOffering || '-'}</td>
                         <td className="p-2 font-mono text-center">
-                          {r.term}月 / {r.count}次 / {r.target}
+                          {r.term}月 / {r.count === '0' ? '不限次数' : `${r.count}次`} / {r.target}
                         </td>
                         <td className="p-2 text-rose-600 truncate max-w-[150px] font-medium">{r.parts}</td>
                       </tr>

@@ -303,7 +303,13 @@ export const HistoryRiskQueryView: React.FC<HistoryRiskQueryViewProps> = ({
                       {r.target || '-'}
                     </td>
                     <td className="p-3 text-center font-mono text-slate-600">{r.term}</td>
-                    <td className="p-3 text-center font-mono text-slate-600">{r.count}</td>
+                    <td className="p-3 text-center font-mono text-slate-600">
+                      {r.count === '0' ? (
+                        <span className="text-emerald-700 font-semibold">不限次数</span>
+                      ) : (
+                        r.count
+                      )}
+                    </td>
                     <td className="p-3 font-bold text-indigo-900">{r.part}</td>
                     <td className="p-3 text-center">
                       <span className="px-2.5 py-0.5 bg-indigo-100 text-indigo-800 font-mono font-bold rounded-full text-xs">
@@ -406,7 +412,7 @@ export const HistoryRiskQueryView: React.FC<HistoryRiskQueryViewProps> = ({
                           </span>
                         </td>
                         <td className="p-2.5 text-center font-mono text-slate-600">
-                          {r.target} / {r.term}月 / {r.count}次
+                          {r.target} / {r.term}月 / {r.count === '0' ? '不限次数' : `${r.count}次`}
                         </td>
                         <td className="p-2.5 font-bold text-slate-900">{r.part}</td>
                         <td className="p-2.5 text-center font-mono font-bold text-indigo-700 bg-indigo-50/50">

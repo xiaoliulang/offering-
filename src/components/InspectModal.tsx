@@ -60,7 +60,9 @@ export const InspectModal: React.FC<InspectModalProps> = ({ isOpen, row, onClose
                 <div className="text-[10px] text-emerald-400">期限(月)</div>
               </div>
               <div className="bg-amber-950 border border-amber-500/50 rounded px-2.5 py-1.5">
-                <div className="text-amber-300 font-bold">{row.count || '-'}</div>
+                <div className="text-amber-300 font-bold">
+                  {row.count === '0' ? '0 (不限次数)' : (row.count || '-')}
+                </div>
                 <div className="text-[10px] text-amber-400">次数(次)</div>
               </div>
               <div className="bg-purple-950 border border-purple-500/50 rounded px-2.5 py-1.5">

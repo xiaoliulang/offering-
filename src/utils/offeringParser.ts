@@ -160,6 +160,16 @@ export function parseOfferingString(s: string): DecodedOffering {
 }
 
 /**
+ * 格式化保障次数显示：
+ * 0 代表 “不限次数”
+ */
+export function formatOfferingCount(count: string | undefined | null, withUnit = true): string {
+  if (count === '0') return '不限次数';
+  if (!count) return '-';
+  return withUnit ? `${count}次` : count;
+}
+
+/**
  * Fully resolves a row based on offering code, hardware BU, and user configs.
  */
 export function resolveOfferingRecord(

@@ -579,7 +579,13 @@ export const RiskTableModal: React.FC<RiskTableModalProps> = ({
                         {row.target || '-'}
                       </td>
                       <td className="p-2.5 text-center font-mono">{row.term}</td>
-                      <td className="p-2.5 text-center font-mono">{row.count}</td>
+                      <td className="p-2.5 text-center font-mono">
+                        {row.count === '0' ? (
+                          <span className="text-emerald-700 font-semibold">不限次数</span>
+                        ) : (
+                          row.count
+                        )}
+                      </td>
                       <td className="p-2.5 font-bold text-blue-700 bg-blue-50/40">
                         {row.displayCategory}
                       </td>

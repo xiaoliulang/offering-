@@ -2,6 +2,9 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { spawn, exec } from 'child_process';
+import { promisify } from 'util';
+import { chromium } from 'playwright';
 import {
   initDatabase,
   getAllData,
@@ -17,6 +20,7 @@ import {
   resetDefaultConfigs,
 } from './src/server/db';
 
+const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -24,6 +28,90 @@ const isProduction = process.env.NODE_ENV === 'production';
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const EXPORT_DIR = path.resolve(process.cwd(), 'data');
 const EXPORT_FILE_PATH = path.join(EXPORT_DIR, 'latest_workbench_export.xlsx');
+
+async function executePlaywrightAutoFill(excelFilePath: string) {
+  const targetUrl = 'https://cbg.huawei.com/#/group/finance/service_iprice_configuration';
+
+  // 探测 Edge 浏览器执行路径
+  let edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+  if (!fs.existsSync(edgePath)) {
+    edgePath = 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe';
+  }
+
+  // 探测用户配置目录（支持自动获取当前用户目录或默认指定目录）
+  const userProfile = process.env.USERPROFILE || 'C:\\Users\\y00656362';
+  let profileDir = path.join(userProfile, 'AppData', 'Local', 'Microsoft', 'Edge', 'User Data');
+  if (!fs.existsSync(profileDir)) {
+    profileDir = 'C:\\Users\\y00656362\\AppData\\Local\\Microsoft\\Edge\\User Data';
+  }
+
+  console.log('[Playwright Engine] Edge 浏览器路径:', edgePath);
+  console.log('[Playwright Engine] Edge 用户配置目录:', profileDir);
+  console.log('[Playwright Engine] 目标 URL:', targetUrl);
+  console.log('[Playwright Engine] 注入目标表格:', excelFilePath);
+
+  // 1. 在 Windows 环境下清理残留 edge 进程，确保 9222 调试端口可绑定
+  try {
+    await execAsync('taskkill /f /im msedge.exe');
+  } catch {
+    // 忽略未运行时的报错
+  }
+  await new Promise((r) => setTimeout(r, 1500));
+
+  // 2. 拉起带远程调试端口 9222 的 Edge 浏览器，继承用户的登录态
+  console.log('[Playwright Engine] 正在拉起带 9222 调试端口的 Edge...');
+  const edgeProc = spawn(
+    edgePath,
+    ['--remote-debugging-port=9222', `--user-data-dir=${profileDir}`, targetUrl],
+    { detached: true, stdio: 'ignore' }
+  );
+  edgeProc.unref();
+
+  console.log('[Playwright Engine] 等待 3.5 秒确保 Edge 调试服务就绪...');
+  await new Promise((r) => setTimeout(r, 3500));
+
+  // 3. Playwright 通过 CDP 连接本地 Edge 9222 端口
+  console.log('[Playwright Engine] 正在连接本地 Edge 9222 调试端口...');
+  const browser = await chromium.connectOverCDP('http://localhost:9222');
+  const context = browser.contexts()[0] || browser;
+
+  let page = context.pages().find((p) => p.url().includes('service_iprice_configuration'));
+  if (!page) {
+    page = context.pages()[0] || (await context.newPage());
+    await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 30000 });
+  }
+
+  // 步骤 1: 点击“服务Offering配置表” Tab
+  console.log('[Playwright Engine] ⏳ 步骤 1/4: 定位并点击「服务Offering配置表」...');
+  const tabElem = page.getByText('服务Offering配置表', { exact: true });
+  await tabElem.waitFor({ state: 'visible', timeout: 15000 });
+  await tabElem.click();
+  console.log('[Playwright Engine] ✅ 步骤 1 完成：已切换至「服务Offering配置表」');
+
+  // 步骤 2: 点击“导入”按钮
+  console.log('[Playwright Engine] ⏳ 步骤 2/4: 点击「导入」按钮...');
+  const importXPath =
+    '//*[@id="serviceParameter"]/section/main/div/div/div/div[1]/div/div[6]/div[1]/div/div/div[1]/div[2]/div[4]/button';
+  const importBtn = page.locator(`xpath=${importXPath}`);
+  await importBtn.waitFor({ state: 'visible', timeout: 15000 });
+  await importBtn.click();
+  console.log('[Playwright Engine] ✅ 步骤 2 完成：已点击「导入」按钮');
+
+  // 步骤 3: 点击弹框中的“选择文件”按钮
+  console.log('[Playwright Engine] ⏳ 步骤 3/4: 点击上传弹窗中的「选择文件」按钮...');
+  const uploadBtn = page.locator('button.uploadBtn');
+  await uploadBtn.waitFor({ state: 'visible', timeout: 10000 });
+  await uploadBtn.click();
+  console.log('[Playwright Engine] ✅ 步骤 3 完成：已点击「选择文件」按钮');
+
+  // 步骤 4: 静默注入 Excel 配置文件
+  console.log(`[Playwright Engine] ⏳ 步骤 4/4: 注入 Excel 表格: ${excelFilePath}`);
+  await page.setInputFiles("input[type='file']", excelFilePath);
+  console.log('[Playwright Engine] ✅ 步骤 4 完成：Excel 文件注入成功！');
+
+  console.log('[Playwright Engine] 🎉 步骤 1~4 已全部自动执行完成！步骤 5（保存）保持暂停供人工核对。');
+  return true;
+}
 
 async function startServer() {
   const app = express();
@@ -67,7 +155,48 @@ async function startServer() {
     }
   });
 
-  // Endpoint for Tampermonkey or external scripts to download latest Excel export
+  // Endpoint to directly trigger Playwright auto-fill workflow
+  app.post('/api/workbench/autofill', async (req, res) => {
+    try {
+      const { base64, filename } = req.body;
+      if (!base64) {
+        return res.status(400).json({ success: false, error: '缺少表格数据 (Missing base64)' });
+      }
+      const buffer = Buffer.from(base64, 'base64');
+      if (!fs.existsSync(EXPORT_DIR)) {
+        fs.mkdirSync(EXPORT_DIR, { recursive: true });
+      }
+      fs.writeFileSync(EXPORT_FILE_PATH, buffer);
+      console.log(`[AutoFill API] 已生成待注入 Excel: ${EXPORT_FILE_PATH} (${buffer.length} 字节)`);
+
+      // 在当前系统（本地机器）执行 Playwright 流程
+      try {
+        await executePlaywrightAutoFill(EXPORT_FILE_PATH);
+        res.json({
+          success: true,
+          message: '步骤 1~4 已全部自动执行完成！已在 Edge 中拉起并装填数据，请核对后手动点击【保存】。',
+        });
+      } catch (pwErr: any) {
+        console.error('[Playwright Execution Error]:', pwErr);
+        // 如果是在无 Edge 的云端容器运行，给出清晰友好的提示
+        if (process.platform !== 'win32') {
+          return res.json({
+            success: false,
+            isCloud: true,
+            message:
+              'Excel 表格已成功生成！当前工作台运行在云端 Linux 预览环境，无法直接拉起您办公电脑上的 Edge 浏览器。当您在本地电脑运行本项目（npm run dev）时，点击此按钮将全自动在您的电脑拉起 Edge 完成填报！',
+          });
+        }
+        res.status(500).json({
+          success: false,
+          error: pwErr.message || '自动化执行异常',
+        });
+      }
+    } catch (err: any) {
+      console.error('[AutoFill Route Error]:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
   app.get('/api/workbench/latest-export.xlsx', (_req, res) => {
     try {
       if (fs.existsSync(EXPORT_FILE_PATH)) {
